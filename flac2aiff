@@ -1,0 +1,57 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+# --- CONFIGURATION ---
+TARGET_DIR="${TARGET_DIR:-/home/chrizzle/music/source_aiff}"
+
+# 1. VALIDATE INPUT
+if (( $# == 0 )); then
+    echo "Usage: ./flac2aiff <path_to_flac>"
+    exit 1
+fi
+
+input_file="$1"
+
+if [[ ! -f "$input_file" ]]; then
+    echo "❌ Error: File '$input_file' not found."
+    exit 1
+fi
+
+# 2. VALIDATE TARGET DIRECTORY
+if [[ -e "$TARGET_DIR" ]]; then
+    if [[ ! -d "$TARGET_DIR" ]]; then
+        echo "❌ Error: Target path '$TARGET_DIR' exists but is NOT a directory."
+        exit 1
+    fi
+    # If it exists and is a directory, we are good to go.
+else
+    echo "📁 Creating target directory: $TARGET_DIR"
+    mkdir -p "$TARGET_DIR" || { echo "❌ Failed to create directory"; exit 1; }
+fi
+
+# 3. PREPARE PATHS
+base_name="${input_file:t}"
+target_name="${base_name:r}.aiff"
+output_path="$TARGET_DIR/$target_name"
+
+# 4. SKIP LOGIC
+if [[ -f "$output_path" ]]; then
+    echo "⏭️  Skipping: $target_name already exists."
+    exit 0
+fi
+
+echo "➡️  Converting: $base_name"
+
+# 5. EXECUTION
+# We use -nostdin and redirect input to ensure total isolation
+ffmpeg -nostdin -i "$input_file" \
+       -map 0 -write_id3v2 1 -y \
+       -loglevel error \
+       "$output_path" < /dev/null
+
+if [[ $? -eq 0 ]]; then
+    echo "✅ Success: $target_name"
+else
+    echo "❌ Failed: $base_name"
+    exit 1
+fi
