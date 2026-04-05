@@ -188,6 +188,8 @@ Prefer:
 * Pragmatic Rust best practices
 * Explicit, understandable control flow
 * Small functions with clear responsibilities
+* Test-driven development is the priority.
+* Spec-driven development when a project starts, and when requirements are unclear, vague, or ambiguous
 
 Write idiomatic Rust when it improves clarity, but avoid advanced idioms or abstractions that reduce readability.
 
