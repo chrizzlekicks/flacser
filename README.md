@@ -12,6 +12,9 @@ It supports single-file conversion and directory batch conversion with parallel 
 Install `ffmpeg`:
 
 ```bash
+# Arch 
+sudo pacman -S ffmpeg
+
 # Ubuntu / Debian
 sudo apt install ffmpeg
 
