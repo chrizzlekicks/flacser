@@ -56,30 +56,35 @@ pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>>
 }
 
 fn validate_output_dir(output_dir: Option<&Path>) -> Result<()> {
-    if let Some(dir) = output_dir
-        && dir.exists()
-        && !dir.is_dir()
-    {
-        bail!(
-            "output path exists but is not a directory: {}",
-            dir.display()
-        );
-    }
+    match output_dir {
+        None => Ok(()),
+        Some(dir) => {
+            if dir.exists() && !dir.is_dir() {
+                bail!(
+                    "output path exists but is not a directory: {}",
+                    dir.display()
+                );
+            }
 
-    Ok(())
+            Ok(())
+        }
+    }
 }
 
 fn detect_output_collisions(jobs: &[ConversionJob]) -> Result<()> {
     let mut seen: HashMap<&Path, &Path> = HashMap::new();
 
     for job in jobs {
-        if let Some(existing_input) = seen.get(job.output.as_path()) {
-            bail!(
-                "output collision detected: {} and {} both map to {}",
-                existing_input.display(),
-                job.input.display(),
-                job.output.display()
-            );
+        match seen.get(job.output.as_path()) {
+            Some(existing_input) => {
+                bail!(
+                    "output collision detected: {} and {} both map to {}",
+                    existing_input.display(),
+                    job.input.display(),
+                    job.output.display()
+                );
+            }
+            None => {}
         }
         seen.insert(job.output.as_path(), job.input.as_path());
     }

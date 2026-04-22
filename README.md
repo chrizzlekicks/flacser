@@ -1,213 +1,116 @@
 # flacser
 
-A simple, robust shell script to convert `.flac` audio files to `.aiff` using `ffmpeg`.
+`flacser` is a Rust CLI tool that converts `.flac` files to `.aiff` using `ffmpeg`.
 
-Designed with reliability and automation in mind, this script includes input validation, safe execution defaults, and skip logic to avoid redundant work.
+It supports single-file conversion and directory batch conversion with parallel execution.
 
----
+## Requirements
 
-## ✨ Features
+- `ffmpeg`
+- Rust toolchain (for building from source)
 
-* 🎧 Converts `.flac` → `.aiff`
-* 📁 Automatically creates target directory if missing
-* ⏭️ Skips files that are already converted
-* ❌ Fails fast on invalid input
-* 🔒 Safe execution with `set -euo pipefail`
-* 🤖 Designed to be scriptable and testable
-
----
-
-## 📦 Requirements
-
-* `zsh`
-* `ffmpeg`
-
-### Install dependencies (examples)
-
-**Ubuntu / Debian:**
+Install `ffmpeg`:
 
 ```bash
-sudo apt install zsh ffmpeg
+# Ubuntu / Debian
+sudo apt install ffmpeg
+
+# macOS (Homebrew)
+brew install ffmpeg
 ```
 
-**macOS (Homebrew):**
+## Build
 
 ```bash
-brew install zsh ffmpeg
+cargo build --release
 ```
 
----
-
-## 🚀 Usage
+Binary path:
 
 ```bash
-./flac2aiff <path_to_flac>
+target/release/flacser
 ```
 
-### Example
+## Usage
 
 ```bash
-./flac2aiff ~/music/track.flac
+flacser convert [OPTIONS] <INPUT_PATH>
 ```
 
----
+`<INPUT_PATH>` can be:
 
-## ⚙️ Configuration
+- a single `.flac` file
+- a directory (batch mode)
 
-By default, converted files are written to:
+### Options (v0.1)
+
+- `--output-dir <OUTPUT_DIR>`: write outputs into a specific directory
+- `--dry-run`: plan/execute flow without running `ffmpeg`
+
+## Behavior
+
+### File mode
+
+- Converts one `.flac` file to `.aiff`
+- Default output path is next to the input file
+- If `--output-dir` is set, output is written there
+
+### Directory mode
+
+- Non-recursive by default (top-level only)
+- Finds `.flac` files case-insensitively
+- Preserves relative structure from the input root
+- Skips outputs that already exist
+
+### Execution and exits
+
+- Runs jobs in parallel using Rayon
+- Default jobs: `max(1, cpu_cores - 1)`
+- Continues processing when individual jobs fail
+- Exits non-zero if any job fails
+
+## Examples
+
+Single file:
 
 ```bash
-/home/chrizzle/music/source_aiff
+flacser convert ./music/track.flac
 ```
 
-### Override target directory
-
-You can override the output directory via environment variable:
+Single file with output dir:
 
 ```bash
-TARGET_DIR=/custom/output/path ./flac2aiff track.flac
+flacser convert ./music/track.flac --output-dir ./out
 ```
 
----
-
-## 📁 Output Behavior
-
-Given:
+Directory dry run:
 
 ```bash
-input:  /music/song.flac
-output: $TARGET_DIR/song.aiff
+flacser convert ./music --dry-run
 ```
 
----
+## Testing
 
-## 🔁 Skip Logic
-
-If the output file already exists:
+Run all tests:
 
 ```bash
-⏭️  Skipping: song.aiff already exists.
+cargo test
 ```
 
-The script exits successfully without reprocessing.
+Test suite includes:
 
----
+- unit tests for discover/plan/convert/summary/config logic
+- integration tests for CLI behavior and exit codes
+- integration tests with mocked `ffmpeg` via `PATH`
 
-## ❌ Error Handling
+## Roadmap
 
-### Missing argument
+Planned for `v0.2.0`:
 
-```bash
-Usage: ./flac2aiff <path_to_flac>
-```
+- `--jobs`
+- `--overwrite`
+- `--recursive`
 
-### Input file not found
+## License
 
-```bash
-❌ Error: File '...' not found.
-```
-
-### Invalid target path
-
-```bash
-❌ Error: Target path '...' exists but is NOT a directory.
-```
-
----
-
-## 🧠 Implementation Details
-
-### Safe Shell Practices
-
-The script uses:
-
-```bash
-set -euo pipefail
-```
-
-* `-e`: exit on error
-* `-u`: fail on unset variables
-* `-o pipefail`: catch pipeline errors
-
-### Argument Safety
-
-Uses:
-
-```bash
-${1:-}
-```
-
-or:
-
-```bash
-(( $# == 0 ))
-```
-
-to avoid crashes when no arguments are passed.
-
----
-
-## 🔊 Conversion Command
-
-Internally uses:
-
-```bash
-ffmpeg -nostdin -i "$input_file" \
-       -map 0 -write_id3v2 1 -y \
-       -loglevel error \
-       "$output_path" < /dev/null
-```
-
-### Why these flags?
-
-* `-nostdin`: prevents blocking in pipelines
-* `-map 0`: include all streams
-* `-write_id3v2 1`: preserve metadata
-* `-y`: overwrite without prompting
-* `< /dev/null`: ensures non-interactive behavior
-
----
-
-## 🧪 Testing
-
-The script is designed to be tested with a framework like **Bats**.
-
-Key testing strategies:
-
-* Mock `ffmpeg`
-* Isolate filesystem using temp directories
-* Inject `TARGET_DIR` via environment
-
----
-
-## 📌 Design Philosophy
-
-This script follows classic Unix principles:
-
-* Do one thing well
-* Fail loudly and early
-* Avoid hidden side effects
-* Be composable in pipelines
-
----
-
-## 🚧 Possible Improvements
-
-* Batch processing (multiple files / directories)
-* Parallel execution
-* Logging verbosity levels
-* Support for additional formats
-* CLI flags (e.g. `--output-dir`, `--force`)
-
----
-
-## 📜 License
-
-MIT (or your preferred license)
-
----
-
-## 🙌 Acknowledgements
-
-Built for efficient local audio workflows and automation-friendly pipelines.
-
+MIT
