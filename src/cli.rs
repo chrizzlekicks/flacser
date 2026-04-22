@@ -1,11 +1,22 @@
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
 #[command(name = "flacser")]
 #[command(about = "Convert .flac files to .aiff with ffmpeg")]
 pub struct Cli {
+    #[command(subcommand)]
+    pub command: Commands,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Commands {
+    Convert(ConvertArgs),
+}
+
+#[derive(Debug, clap::Args)]
+pub struct ConvertArgs {
     // Input file or directory
     pub input_path: PathBuf,
 

@@ -2,7 +2,7 @@ use std::{num::NonZeroUsize, path::PathBuf};
 
 use anyhow::Result;
 
-use crate::cli::Cli;
+use crate::cli::{Cli, Commands};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -14,10 +14,12 @@ pub struct Config {
 
 impl Config {
     pub fn from_cli(cli: Cli) -> Self {
+        let Commands::Convert(convert) = cli.command;
+
         Self {
-            input_path: cli.input_path,
-            output_dir: cli.output_dir,
-            dry_run: cli.dry_run,
+            input_path: convert.input_path,
+            output_dir: convert.output_dir,
+            dry_run: convert.dry_run,
             jobs: default_jobs(),
         }
     }
