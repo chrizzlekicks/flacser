@@ -43,3 +43,35 @@ pub fn print(summary: &Summary) {
         eprintln!("FAILED {}: {}", input.display(), error);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::convert::JobResult;
+
+    use super::from_results;
+
+    #[test]
+    fn aggregates_counts_and_failure_details() {
+        let failed_input = PathBuf::from("broken.flac");
+        let results = vec![
+            JobResult::Converted,
+            JobResult::Skipped,
+            JobResult::Failed {
+                input: failed_input.clone(),
+                error: "ffmpeg failed".to_string(),
+            },
+        ];
+
+        let summary = from_results(&results);
+        assert_eq!(summary.total, 3);
+        assert_eq!(summary.converted, 1);
+        assert_eq!(summary.skipped, 1);
+        assert_eq!(summary.failed, 1);
+        assert_eq!(
+            summary.failure_details,
+            vec![(failed_input, "ffmpeg failed".to_string())]
+        );
+    }
+}

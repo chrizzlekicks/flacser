@@ -36,3 +36,43 @@ fn default_jobs() -> usize {
 
     cpus.saturating_sub(1).max(1)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::cli::{Cli, Commands, ConvertArgs};
+
+    use super::Config;
+
+    #[test]
+    fn from_cli_maps_convert_args() {
+        let cli = Cli {
+            command: Commands::Convert(ConvertArgs {
+                input_path: PathBuf::from("in.flac"),
+                output_dir: Some(PathBuf::from("out")),
+                dry_run: true,
+            }),
+        };
+
+        let config = Config::from_cli(cli);
+
+        assert_eq!(config.input_path, PathBuf::from("in.flac"));
+        assert_eq!(config.output_dir, Some(PathBuf::from("out")));
+        assert!(config.dry_run);
+    }
+
+    #[test]
+    fn default_jobs_is_always_at_least_one() {
+        let cli = Cli {
+            command: Commands::Convert(ConvertArgs {
+                input_path: PathBuf::from("in.flac"),
+                output_dir: None,
+                dry_run: false,
+            }),
+        };
+
+        let config = Config::from_cli(cli);
+        assert!(config.jobs >= 1);
+    }
+}
