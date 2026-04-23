@@ -30,6 +30,7 @@ fn execute_with_runner(
     runner: FfmpegRunner,
 ) -> Vec<JobResult> {
     let configured_jobs = config.jobs;
+    let overwrite = config.overwrite;
     let dry_run = config.dry_run;
 
     if jobs.is_empty() {
@@ -44,13 +45,18 @@ fn execute_with_runner(
 
     pool.install(|| {
         jobs.into_par_iter()
-            .map(|job| execute_job(job, dry_run, runner))
+            .map(|job| execute_job(job, overwrite, dry_run, runner))
             .collect()
     })
 }
 
-fn execute_job(job: ConversionJob, dry_run: bool, runner: FfmpegRunner) -> JobResult {
-    if job.output.exists() {
+fn execute_job(
+    job: ConversionJob,
+    overwrite: bool,
+    dry_run: bool,
+    runner: FfmpegRunner,
+) -> JobResult {
+    if job.output.exists() && !overwrite {
         return JobResult::Skipped;
     }
 
@@ -111,10 +117,11 @@ mod tests {
         dir
     }
 
-    fn test_config(dry_run: bool) -> Config {
+    fn test_config(dry_run: bool, overwrite: bool) -> Config {
         Config {
             input_path: PathBuf::from("ignored"),
             output_dir: None,
+            overwrite,
             dry_run,
             jobs: 1,
         }
@@ -144,7 +151,7 @@ mod tests {
         fs::write(&input, b"").expect("create input");
         fs::write(&output, b"").expect("create output");
 
-        let config = test_config(false);
+        let config = test_config(false, false);
         let results = execute_with_runner(
             &config,
             vec![ConversionJob {
@@ -161,6 +168,30 @@ mod tests {
     }
 
     #[test]
+    fn execute_converts_existing_output_when_overwrite_is_enabled() {
+        let dir = test_dir("overwrite-existing");
+        let input = dir.join("song.flac");
+        let output = dir.join("song.aiff");
+        fs::write(&input, b"").expect("create input");
+        fs::write(&output, b"").expect("create output");
+
+        let config = test_config(false, true);
+        let results = execute_with_runner(
+            &config,
+            vec![ConversionJob {
+                input: input.clone(),
+                output,
+            }],
+            runner_ok,
+        );
+
+        assert_eq!(results.len(), 1);
+        assert!(matches!(results[0], JobResult::Converted));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn execute_dry_run_marks_converted_without_calling_runner() {
         fn panic_runner(_: &Path, _: &Path) -> Result<()> {
             panic!("runner should not be called during dry-run");
@@ -171,7 +202,7 @@ mod tests {
         let output = dir.join("song.aiff");
         fs::write(&input, b"").expect("create input");
 
-        let config = test_config(true);
+        let config = test_config(true, false);
         let results =
             execute_with_runner(&config, vec![ConversionJob { input, output }], panic_runner);
 
@@ -188,7 +219,7 @@ mod tests {
         let output = dir.join("nested/song.aiff");
         fs::write(&input, b"").expect("create input");
 
-        let config = test_config(false);
+        let config = test_config(false, false);
         let results = execute_with_runner(
             &config,
             vec![ConversionJob {
@@ -226,7 +257,7 @@ mod tests {
 
         MKDIR_FAIL_RUNNER_CALLED.store(false, std::sync::atomic::Ordering::Relaxed);
 
-        let config = test_config(false);
+        let config = test_config(false, false);
         let results = execute_with_runner(
             &config,
             vec![ConversionJob {
@@ -260,7 +291,7 @@ mod tests {
         let output = dir.join("song.aiff");
         fs::write(&input, b"").expect("create input");
 
-        let config = test_config(false);
+        let config = test_config(false, false);
         let results =
             execute_with_runner(&config, vec![ConversionJob { input, output }], runner_ok);
 

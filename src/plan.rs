@@ -117,6 +117,7 @@ mod tests {
         Config {
             input_path,
             output_dir,
+            overwrite: false,
             dry_run: false,
             jobs: 1,
         }

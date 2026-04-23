@@ -24,6 +24,10 @@ pub struct ConvertArgs {
     #[arg(long)]
     pub output_dir: Option<PathBuf>,
 
+    // Overwrite existing outputs
+    #[arg(long, default_value_t = false)]
+    pub overwrite: bool,
+
     // Dry run (no exec)
     #[arg(long, default_value_t = false)]
     pub dry_run: bool,
