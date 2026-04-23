@@ -1,21 +1,25 @@
 use std::path::PathBuf;
 
-use crate::convert::JobResult;
+use crate::convert::{ExecutionReport, JobResult};
 
 pub struct Summary {
     pub total: usize,
     pub converted: usize,
     pub skipped: usize,
     pub failed: usize,
+    pub workers: usize,
     pub failure_details: Vec<(PathBuf, String)>,
 }
 
-pub fn from_results(results: &Vec<JobResult>) -> Summary {
+pub fn from_report(report: &ExecutionReport) -> Summary {
+    let ExecutionReport { results, workers } = report;
+
     let mut summary = Summary {
         total: results.len(),
         converted: 0,
         skipped: 0,
         failed: 0,
+        workers: *workers,
         failure_details: Vec::new(),
     };
 
@@ -35,8 +39,8 @@ pub fn from_results(results: &Vec<JobResult>) -> Summary {
 
 pub fn print(summary: &Summary) {
     println!(
-        "Summary: total={}, converted={}, skipped={}, failed={}",
-        summary.total, summary.converted, summary.skipped, summary.failed
+        "Summary: total={}, converted={}, skipped={}, failed={}, workers={}",
+        summary.total, summary.converted, summary.skipped, summary.failed, summary.workers
     );
 
     for (input, error) in &summary.failure_details {
@@ -48,9 +52,9 @@ pub fn print(summary: &Summary) {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::convert::JobResult;
+    use crate::convert::{ExecutionReport, JobResult};
 
-    use super::from_results;
+    use super::from_report;
 
     #[test]
     fn aggregates_counts_and_failure_details() {
@@ -64,11 +68,17 @@ mod tests {
             },
         ];
 
-        let summary = from_results(&results);
+        let report = ExecutionReport {
+            results,
+            workers: 2,
+        };
+
+        let summary = from_report(&report);
         assert_eq!(summary.total, 3);
         assert_eq!(summary.converted, 1);
         assert_eq!(summary.skipped, 1);
         assert_eq!(summary.failed, 1);
+        assert_eq!(summary.workers, 2);
         assert_eq!(
             summary.failure_details,
             vec![(failed_input, "ffmpeg failed".to_string())]

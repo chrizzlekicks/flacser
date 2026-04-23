@@ -56,7 +56,7 @@ fn summary_line_is_stable_for_dry_run_success() {
 
     assert_eq!(
         stdout,
-        "Summary: total=1, converted=1, skipped=0, failed=0\n"
+        "Summary: total=1, converted=1, skipped=0, failed=0, workers=1\n"
     );
     assert!(stderr.is_empty());
 }
@@ -82,7 +82,59 @@ fn summary_line_is_stable_for_skip_case() {
 
     assert_eq!(
         stdout,
-        "Summary: total=1, converted=0, skipped=1, failed=0\n"
+        "Summary: total=1, converted=0, skipped=1, failed=0, workers=1\n"
+    );
+    assert!(stderr.is_empty());
+}
+
+#[test]
+fn summary_reports_zero_workers_for_empty_input() {
+    let tmp = TempDir::new().expect("create temp dir");
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(tmp.path())
+        .arg("--dry-run")
+        .arg("--jobs")
+        .arg("8")
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    let stderr = stderr_text(&assert);
+
+    assert_eq!(
+        stdout,
+        "Summary: total=0, converted=0, skipped=0, failed=0, workers=0\n"
+    );
+    assert!(stderr.is_empty());
+}
+
+#[test]
+fn summary_reports_actual_workers_used() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let first = tmp.path().join("first.flac");
+    let second = tmp.path().join("second.flac");
+    write_file(&first);
+    write_file(&second);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(tmp.path())
+        .arg("--dry-run")
+        .arg("--jobs")
+        .arg("8")
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    let stderr = stderr_text(&assert);
+
+    assert_eq!(
+        stdout,
+        "Summary: total=2, converted=2, skipped=0, failed=0, workers=2\n"
     );
     assert!(stderr.is_empty());
 }
@@ -113,7 +165,7 @@ fn failure_prints_summary_to_stdout_and_details_to_stderr() {
 
     assert_eq!(
         stdout,
-        "Summary: total=1, converted=0, skipped=0, failed=1\n"
+        "Summary: total=1, converted=0, skipped=0, failed=1, workers=1\n"
     );
     assert!(stderr.contains("FAILED"));
     assert!(stderr.contains(&input.display().to_string()));
@@ -148,6 +200,8 @@ fn partial_batch_failure_has_predictable_summary_counts() {
         .arg(&input_dir)
         .arg("--output-dir")
         .arg(&output_dir)
+        .arg("--jobs")
+        .arg("2")
         .env("PATH", path)
         .assert()
         .failure();
@@ -157,7 +211,7 @@ fn partial_batch_failure_has_predictable_summary_counts() {
 
     assert_eq!(
         stdout,
-        "Summary: total=2, converted=1, skipped=0, failed=1\n"
+        "Summary: total=2, converted=1, skipped=0, failed=1, workers=2\n"
     );
     assert_eq!(
         stderr

@@ -20,7 +20,13 @@ pub enum JobResult {
     Failed { input: PathBuf, error: String },
 }
 
-pub fn execute(config: &Config, jobs: Vec<ConversionJob>) -> Vec<JobResult> {
+#[derive(Debug, Clone)]
+pub struct ExecutionReport {
+    pub results: Vec<JobResult>,
+    pub workers: usize,
+}
+
+pub fn execute(config: &Config, jobs: Vec<ConversionJob>) -> ExecutionReport {
     execute_with_runner(config, jobs, run_ffmpeg)
 }
 
@@ -28,13 +34,16 @@ fn execute_with_runner(
     config: &Config,
     jobs: Vec<ConversionJob>,
     runner: FfmpegRunner,
-) -> Vec<JobResult> {
+) -> ExecutionReport {
     let configured_jobs = config.jobs;
     let overwrite = config.overwrite;
     let dry_run = config.dry_run;
 
     if jobs.is_empty() {
-        return Vec::new();
+        return ExecutionReport {
+            results: Vec::new(),
+            workers: 0,
+        };
     }
 
     let workers = configured_jobs.min(jobs.len()).max(1);
@@ -43,11 +52,13 @@ fn execute_with_runner(
         .build()
         .expect("failed to build rayon threadpool");
 
-    pool.install(|| {
+    let results = pool.install(|| {
         jobs.into_par_iter()
             .map(|job| execute_job(job, overwrite, dry_run, runner))
             .collect()
-    })
+    });
+
+    ExecutionReport { results, workers }
 }
 
 fn execute_job(
@@ -153,7 +164,7 @@ mod tests {
         fs::write(&output, b"").expect("create output");
 
         let config = test_config(false, false);
-        let results = execute_with_runner(
+        let report = execute_with_runner(
             &config,
             vec![ConversionJob {
                 input: input.clone(),
@@ -162,8 +173,9 @@ mod tests {
             runner_fail,
         );
 
-        assert_eq!(results.len(), 1);
-        assert!(matches!(results[0], JobResult::Skipped));
+        assert_eq!(report.results.len(), 1);
+        assert!(matches!(report.results[0], JobResult::Skipped));
+        assert_eq!(report.workers, 1);
 
         let _ = fs::remove_dir_all(dir);
     }
@@ -177,7 +189,7 @@ mod tests {
         fs::write(&output, b"").expect("create output");
 
         let config = test_config(false, true);
-        let results = execute_with_runner(
+        let report = execute_with_runner(
             &config,
             vec![ConversionJob {
                 input: input.clone(),
@@ -186,8 +198,8 @@ mod tests {
             runner_ok,
         );
 
-        assert_eq!(results.len(), 1);
-        assert!(matches!(results[0], JobResult::Converted));
+        assert_eq!(report.results.len(), 1);
+        assert!(matches!(report.results[0], JobResult::Converted));
 
         let _ = fs::remove_dir_all(dir);
     }
@@ -204,11 +216,11 @@ mod tests {
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(true, false);
-        let results =
+        let report =
             execute_with_runner(&config, vec![ConversionJob { input, output }], panic_runner);
 
-        assert_eq!(results.len(), 1);
-        assert!(matches!(results[0], JobResult::Converted));
+        assert_eq!(report.results.len(), 1);
+        assert!(matches!(report.results[0], JobResult::Converted));
 
         let _ = fs::remove_dir_all(dir);
     }
@@ -221,7 +233,7 @@ mod tests {
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(false, false);
-        let results = execute_with_runner(
+        let report = execute_with_runner(
             &config,
             vec![ConversionJob {
                 input: input.clone(),
@@ -230,8 +242,8 @@ mod tests {
             runner_fail,
         );
 
-        assert_eq!(results.len(), 1);
-        match &results[0] {
+        assert_eq!(report.results.len(), 1);
+        match &report.results[0] {
             JobResult::Failed {
                 input: failed_input,
                 error,
@@ -259,7 +271,7 @@ mod tests {
         MKDIR_FAIL_RUNNER_CALLED.store(false, std::sync::atomic::Ordering::Relaxed);
 
         let config = test_config(false, false);
-        let results = execute_with_runner(
+        let report = execute_with_runner(
             &config,
             vec![ConversionJob {
                 input: input.clone(),
@@ -268,8 +280,8 @@ mod tests {
             runner_mark_called,
         );
 
-        assert_eq!(results.len(), 1);
-        match &results[0] {
+        assert_eq!(report.results.len(), 1);
+        match &report.results[0] {
             JobResult::Failed {
                 input: failed_input,
                 error,
@@ -293,12 +305,44 @@ mod tests {
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(false, false);
-        let results =
-            execute_with_runner(&config, vec![ConversionJob { input, output }], runner_ok);
+        let report = execute_with_runner(&config, vec![ConversionJob { input, output }], runner_ok);
 
-        assert_eq!(results.len(), 1);
-        assert!(matches!(results[0], JobResult::Converted));
+        assert_eq!(report.results.len(), 1);
+        assert!(matches!(report.results[0], JobResult::Converted));
 
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn execute_reports_zero_workers_for_empty_job_list() {
+        let config = test_config(true, false);
+        let report = execute_with_runner(&config, Vec::new(), runner_ok);
+
+        assert_eq!(report.results.len(), 0);
+        assert_eq!(report.workers, 0);
+    }
+
+    #[test]
+    fn execute_reports_actual_workers_used() {
+        let mut config = test_config(true, false);
+        config.jobs = 8;
+
+        let report = execute_with_runner(
+            &config,
+            vec![
+                ConversionJob {
+                    input: PathBuf::from("first.flac"),
+                    output: PathBuf::from("first.aiff"),
+                },
+                ConversionJob {
+                    input: PathBuf::from("second.flac"),
+                    output: PathBuf::from("second.aiff"),
+                },
+            ],
+            runner_ok,
+        );
+
+        assert_eq!(report.results.len(), 2);
+        assert_eq!(report.workers, 2);
     }
 }

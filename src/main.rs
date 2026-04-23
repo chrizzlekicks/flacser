@@ -14,8 +14,8 @@ fn main() -> Result<()> {
 
     let inputs = discover::discover(&config)?;
     let jobs = plan::plan(&config, inputs)?;
-    let results = convert::execute(&config, jobs);
-    let summary = summary::from_results(&results);
+    let report = convert::execute(&config, jobs);
+    let summary = summary::from_report(&report);
 
     summary::print(&summary);
 

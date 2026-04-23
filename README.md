@@ -45,7 +45,7 @@ flacser convert [OPTIONS] <INPUT_PATH>
 - a single `.flac` file
 - a directory (batch mode)
 
-### Options (v0.1)
+### Options (v0.2)
 
 - `--output-dir <OUTPUT_DIR>`: write outputs into a specific directory
 - `--overwrite`: replace existing outputs
@@ -73,6 +73,7 @@ flacser convert [OPTIONS] <INPUT_PATH>
 
 - Runs jobs in parallel using Rayon
 - Default jobs: `max(1, cpu_cores - 1)`
+- Summary reports actual workers used for the run
 - Continues processing when individual jobs fail
 - Exits non-zero if any job fails
 
