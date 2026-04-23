@@ -14,7 +14,7 @@ pub struct ConversionJob {
 }
 
 pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>> {
-    let original_input: &Path = &config.input_path;
+    let original_input = &config.input_path.as_path();
     let output_dir = config.output_dir.as_deref();
     validate_output_dir(output_dir)?;
 
@@ -71,7 +71,7 @@ fn validate_output_dir(output_dir: Option<&Path>) -> Result<()> {
     }
 }
 
-fn detect_output_collisions(jobs: &[ConversionJob]) -> Result<()> {
+fn detect_output_collisions(jobs: &Vec<ConversionJob>) -> Result<()> {
     let mut seen: HashMap<&Path, &Path> = HashMap::new();
 
     for job in jobs {

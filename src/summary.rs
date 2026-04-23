@@ -10,7 +10,7 @@ pub struct Summary {
     pub failure_details: Vec<(PathBuf, String)>,
 }
 
-pub fn from_results(results: &[JobResult]) -> Summary {
+pub fn from_results(results: &Vec<JobResult>) -> Summary {
     let mut summary = Summary {
         total: results.len(),
         converted: 0,

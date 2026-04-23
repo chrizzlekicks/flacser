@@ -1,7 +1,4 @@
-use std::{
-    env, fs,
-    path::Path,
-};
+use std::{env, fs, path::Path};
 
 use assert_cmd::Command;
 use tempfile::TempDir;

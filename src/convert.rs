@@ -58,16 +58,19 @@ fn execute_job(job: ConversionJob, dry_run: bool, runner: FfmpegRunner) -> JobRe
         return JobResult::Converted;
     }
 
-    if let Some(parent_dir) = job.output.parent()
-        && let Err(error) = fs::create_dir_all(parent_dir)
-    {
-        return JobResult::Failed {
-            input: job.input,
-            error: format!(
-                "failed to create output directory {}: {error}",
-                parent_dir.display()
-            ),
-        };
+    match job.output.parent() {
+        Some(parent_dir) => {
+            if let Err(error) = fs::create_dir_all(parent_dir) {
+                return JobResult::Failed {
+                    input: job.input,
+                    error: format!(
+                        "failed to create output directory {}: {error}",
+                        parent_dir.display()
+                    ),
+                };
+            }
+        }
+        None => {}
     }
 
     match runner(&job.input, &job.output) {
