@@ -10,6 +10,7 @@ pub struct Config {
     pub output_dir: Option<PathBuf>,
     pub overwrite: bool,
     pub dry_run: bool,
+    pub recursive: bool,
     pub jobs: usize,
 }
 
@@ -22,6 +23,7 @@ impl Config {
             output_dir: convert.output_dir,
             overwrite: convert.overwrite,
             dry_run: convert.dry_run,
+            recursive: convert.recursive,
             jobs: default_jobs(),
         }
     }
@@ -55,6 +57,7 @@ mod tests {
                 output_dir: Some(PathBuf::from("out")),
                 overwrite: true,
                 dry_run: true,
+                recursive: true,
             }),
         };
 
@@ -64,6 +67,7 @@ mod tests {
         assert_eq!(config.output_dir, Some(PathBuf::from("out")));
         assert!(config.overwrite);
         assert!(config.dry_run);
+        assert!(config.recursive);
     }
 
     #[test]
@@ -74,6 +78,7 @@ mod tests {
                 output_dir: None,
                 overwrite: false,
                 dry_run: false,
+                recursive: false,
             }),
         };
 

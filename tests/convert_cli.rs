@@ -100,6 +100,7 @@ fn convert_help_shows_expected_contract() {
     assert!(stdout.contains("--output-dir <OUTPUT_DIR>"));
     assert!(stdout.contains("--overwrite"));
     assert!(stdout.contains("--dry-run"));
+    assert!(stdout.contains("--recursive"));
 }
 
 #[test]
@@ -141,6 +142,32 @@ fn convert_directory_is_non_recursive_by_default() {
     let stdout = stdout_text(&assert);
     assert!(stdout.contains("total=1"));
     assert!(stdout.contains("converted=1"));
+    assert!(stdout.contains("skipped=0"));
+}
+
+#[test]
+fn convert_directory_recurses_when_recursive_is_enabled() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let root = tmp.path();
+    let top_level = root.join("top.flac");
+    let nested_dir = root.join("nested");
+    let nested_flac = nested_dir.join("inner.flac");
+    write_file(&top_level);
+    fs::create_dir_all(&nested_dir).expect("create nested dir");
+    write_file(&nested_flac);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(root)
+        .arg("--dry-run")
+        .arg("--recursive")
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("total=2"));
+    assert!(stdout.contains("converted=2"));
     assert!(stdout.contains("skipped=0"));
 }
 

@@ -119,6 +119,7 @@ mod tests {
             output_dir,
             overwrite: false,
             dry_run: false,
+            recursive: false,
             jobs: 1,
         }
     }

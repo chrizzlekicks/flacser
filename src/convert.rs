@@ -123,6 +123,7 @@ mod tests {
             output_dir: None,
             overwrite,
             dry_run,
+            recursive: false,
             jobs: 1,
         }
     }

@@ -22,7 +22,7 @@ pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
         );
     }
 
-    let max_depth = 1;
+    let max_depth = if config.recursive { usize::MAX } else { 1 };
     let mut files = Vec::new();
 
     for entry in WalkDir::new(input_path).max_depth(max_depth) {
@@ -76,6 +76,18 @@ mod tests {
             output_dir: None,
             overwrite: false,
             dry_run: false,
+            recursive: false,
+            jobs: 1,
+        }
+    }
+
+    fn recursive_test_config(input_path: PathBuf) -> Config {
+        Config {
+            input_path,
+            output_dir: None,
+            overwrite: false,
+            dry_run: false,
+            recursive: true,
             jobs: 1,
         }
     }
@@ -124,6 +136,24 @@ mod tests {
         let config = test_config(dir.clone());
         let files = discover(&config).expect("discover should succeed");
         assert_eq!(files, vec![a, z]);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn discovers_directory_recursively_when_enabled() {
+        let dir = test_dir("recursive-dir");
+        let a = dir.join("a.flac");
+        let nested_dir = dir.join("nested");
+        let nested = nested_dir.join("nested.flac");
+
+        fs::write(&a, b"").expect("create a");
+        fs::create_dir_all(&nested_dir).expect("create nested dir");
+        fs::write(&nested, b"").expect("create nested");
+
+        let config = recursive_test_config(dir.clone());
+        let files = discover(&config).expect("discover should succeed");
+        assert_eq!(files, vec![a, nested]);
 
         let _ = fs::remove_dir_all(dir);
     }

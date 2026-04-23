@@ -31,6 +31,10 @@ pub struct ConvertArgs {
     // Dry run (no exec)
     #[arg(long, default_value_t = false)]
     pub dry_run: bool,
+
+    // Recurse into subdirectories in directory mode
+    #[arg(long, default_value_t = false)]
+    pub recursive: bool,
 }
 
 pub fn parse() -> Cli {

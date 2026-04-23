@@ -48,7 +48,9 @@ flacser convert [OPTIONS] <INPUT_PATH>
 ### Options (v0.1)
 
 - `--output-dir <OUTPUT_DIR>`: write outputs into a specific directory
+- `--overwrite`: replace existing outputs
 - `--dry-run`: plan/execute flow without running `ffmpeg`
+- `--recursive`: recurse into subdirectories in directory mode
 
 ## Behavior
 
@@ -61,6 +63,7 @@ flacser convert [OPTIONS] <INPUT_PATH>
 ### Directory mode
 
 - Non-recursive by default (top-level only)
+- Recurses into subdirectories when `--recursive` is set
 - Finds `.flac` files case-insensitively
 - Preserves relative structure from the input root
 - Skips outputs that already exist
@@ -110,8 +113,7 @@ Test suite includes:
 
 Planned for `v0.2.0`:
 
-- `--overwrite`
-- `--recursive`
+- configurable job count
 
 ## License
 
