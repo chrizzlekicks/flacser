@@ -110,7 +110,6 @@ Test suite includes:
 
 Planned for `v0.2.0`:
 
-- `--jobs`
 - `--overwrite`
 - `--recursive`
 

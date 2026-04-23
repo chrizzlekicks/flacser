@@ -20,12 +20,9 @@ flacser convert <input-path>
 Flags:
 
 - `--output-dir`
-- `--jobs`
 - `--overwrite`
 - `--dry-run`
 - `--recursive`
-
-Do NOT introduce `--flatten` or `--fail-fast` in v1.
 
 ---
 
