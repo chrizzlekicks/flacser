@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{num::NonZeroUsize, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 
@@ -35,6 +35,10 @@ pub struct ConvertArgs {
     // Recurse into subdirectories in directory mode
     #[arg(long, default_value_t = false)]
     pub recursive: bool,
+
+    // Number of parallel conversion jobs
+    #[arg(long)]
+    pub jobs: Option<NonZeroUsize>,
 }
 
 pub fn parse() -> Cli {

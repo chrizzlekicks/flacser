@@ -24,7 +24,10 @@ impl Config {
             overwrite: convert.overwrite,
             dry_run: convert.dry_run,
             recursive: convert.recursive,
-            jobs: default_jobs(),
+            jobs: convert
+                .jobs
+                .map(NonZeroUsize::get)
+                .unwrap_or_else(default_jobs),
         }
     }
 }
@@ -58,6 +61,7 @@ mod tests {
                 overwrite: true,
                 dry_run: true,
                 recursive: true,
+                jobs: std::num::NonZeroUsize::new(2),
             }),
         };
 
@@ -68,6 +72,7 @@ mod tests {
         assert!(config.overwrite);
         assert!(config.dry_run);
         assert!(config.recursive);
+        assert_eq!(config.jobs, 2);
     }
 
     #[test]
@@ -79,6 +84,7 @@ mod tests {
                 overwrite: false,
                 dry_run: false,
                 recursive: false,
+                jobs: None,
             }),
         };
 

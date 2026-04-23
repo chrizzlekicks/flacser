@@ -51,6 +51,7 @@ flacser convert [OPTIONS] <INPUT_PATH>
 - `--overwrite`: replace existing outputs
 - `--dry-run`: plan/execute flow without running `ffmpeg`
 - `--recursive`: recurse into subdirectories in directory mode
+- `--jobs <JOBS>`: set the number of parallel conversion jobs
 
 ## Behavior
 
@@ -95,6 +96,12 @@ Directory dry run:
 flacser convert ./music --dry-run
 ```
 
+Directory conversion with two parallel jobs:
+
+```bash
+flacser convert ./music --jobs 2
+```
+
 ## Testing
 
 Run all tests:
@@ -108,12 +115,6 @@ Test suite includes:
 - unit tests for discover/plan/convert/summary/config logic
 - integration tests for CLI behavior and exit codes
 - integration tests with mocked `ffmpeg` via `PATH`
-
-## Roadmap
-
-Planned for `v0.2.0`:
-
-- configurable job count
 
 ## License
 

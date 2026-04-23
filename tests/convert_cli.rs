@@ -101,6 +101,26 @@ fn convert_help_shows_expected_contract() {
     assert!(stdout.contains("--overwrite"));
     assert!(stdout.contains("--dry-run"));
     assert!(stdout.contains("--recursive"));
+    assert!(stdout.contains("--jobs <JOBS>"));
+}
+
+#[test]
+fn convert_rejects_zero_jobs() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    write_file(&input);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--jobs")
+        .arg("0")
+        .assert()
+        .failure();
+
+    let stderr = stderr_text(&assert);
+    assert!(stderr.contains("--jobs <JOBS>"));
 }
 
 #[test]
