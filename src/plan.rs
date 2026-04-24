@@ -14,7 +14,7 @@ pub struct ConversionJob {
 }
 
 pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>> {
-    let original_input = &config.input_path.as_path();
+    let original_input = config.input_path.as_path();
     let output_dir = config.output_dir.as_deref();
     validate_output_dir(output_dir)?;
 

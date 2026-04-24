@@ -11,40 +11,45 @@ pub struct Summary {
     pub failure_details: Vec<(PathBuf, String)>,
 }
 
-pub fn from_report(report: &ExecutionReport) -> Summary {
-    let ExecutionReport { results, workers } = report;
+impl Summary {
+    pub fn from_report(report: &ExecutionReport) -> Self {
+        let ExecutionReport { results, workers } = report;
 
-    let mut summary = Summary {
-        total: results.len(),
-        converted: 0,
-        skipped: 0,
-        failed: 0,
-        workers: *workers,
-        failure_details: Vec::new(),
-    };
+        let mut converted = 0;
+        let mut skipped = 0;
+        let mut failed = 0;
+        let mut failure_details = Vec::new();
 
-    for result in results {
-        match result {
-            JobResult::Converted => summary.converted += 1,
-            JobResult::Skipped => summary.skipped += 1,
-            JobResult::Failed { input, error } => {
-                summary.failed += 1;
-                summary.failure_details.push((input.clone(), error.clone()));
+        for result in results {
+            match result {
+                JobResult::Converted => converted += 1,
+                JobResult::Skipped => skipped += 1,
+                JobResult::Failed { input, error } => {
+                    failed += 1;
+                    failure_details.push((input.clone(), error.clone()));
+                }
             }
+        }
+
+        Self {
+            total: results.len(),
+            converted,
+            skipped,
+            failed,
+            workers: *workers,
+            failure_details
         }
     }
 
-    summary
-}
+    pub fn print(&self) {
+        println!(
+            "Summary: total={}, converted={}, skipped={}, failed={}, workers={}",
+            self.total, self.converted, self.skipped, self.failed, self.workers
+        );
 
-pub fn print(summary: &Summary) {
-    println!(
-        "Summary: total={}, converted={}, skipped={}, failed={}, workers={}",
-        summary.total, summary.converted, summary.skipped, summary.failed, summary.workers
-    );
-
-    for (input, error) in &summary.failure_details {
-        eprintln!("FAILED {}: {}", input.display(), error);
+        for (input, error) in &self.failure_details {
+            eprintln!("FAILED {}: {}", input.display(), error);
+        }
     }
 }
 
@@ -54,7 +59,7 @@ mod tests {
 
     use crate::convert::{ExecutionReport, JobResult};
 
-    use super::from_report;
+    use super::Summary;
 
     #[test]
     fn aggregates_counts_and_failure_details() {
@@ -73,7 +78,7 @@ mod tests {
             workers: 2,
         };
 
-        let summary = from_report(&report);
+        let summary = Summary::from_report(&report);
         assert_eq!(summary.total, 3);
         assert_eq!(summary.converted, 1);
         assert_eq!(summary.skipped, 1);
