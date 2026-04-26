@@ -45,7 +45,7 @@ flacser convert [OPTIONS] <INPUT_PATH>
 - a single `.flac` file
 - a directory (batch mode)
 
-### Options (v0.2)
+### Options (v0.1)
 
 - `--output-dir <OUTPUT_DIR>`: write outputs into a specific directory
 - `--overwrite`: replace existing outputs
