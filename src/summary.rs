@@ -37,7 +37,7 @@ impl Summary {
             skipped,
             failed,
             workers: *workers,
-            failure_details
+            failure_details,
         }
     }
 
