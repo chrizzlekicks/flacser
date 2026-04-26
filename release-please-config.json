@@ -1,0 +1,5 @@
+{
+  "release-type": "rust",
+  "package-name": "flacser",
+  "include-component-in-tag": false
+}
