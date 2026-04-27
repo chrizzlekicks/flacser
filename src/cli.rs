@@ -21,23 +21,23 @@ pub struct ConvertArgs {
     pub input_path: PathBuf,
 
     // Output directory
-    #[arg(short = 'o', long)]
+    #[arg(long)]
     pub output_dir: Option<PathBuf>,
 
     // Overwrite existing outputs
-    #[arg(short = 'w', long, default_value_t = false)]
+    #[arg(long, default_value_t = false)]
     pub overwrite: bool,
 
     // Dry run (no exec)
-    #[arg(short = 'n', long, default_value_t = false)]
+    #[arg(long, default_value_t = false)]
     pub dry_run: bool,
 
     // Recurse into subdirectories in directory mode
-    #[arg(short = 'r', long, default_value_t = false)]
+    #[arg(long, default_value_t = false)]
     pub recursive: bool,
 
     // Number of parallel conversion jobs
-    #[arg(short = 'j', long)]
+    #[arg(long)]
     pub jobs: Option<NonZeroUsize>,
 }
 
