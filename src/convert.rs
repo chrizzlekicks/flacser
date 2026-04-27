@@ -75,19 +75,16 @@ fn execute_job(
         return JobResult::Converted;
     }
 
-    match job.output.parent() {
-        Some(parent_dir) => {
-            if let Err(error) = fs::create_dir_all(parent_dir) {
-                return JobResult::Failed {
-                    input: job.input,
-                    error: format!(
-                        "failed to create output directory {}: {error}",
-                        parent_dir.display()
-                    ),
-                };
-            }
+    if let Some(parent_dir) = job.output.parent() {
+        if let Err(error) = fs::create_dir_all(parent_dir) {
+            return JobResult::Failed {
+                input: job.input,
+                error: format!(
+                    "failed to create output directory {}: {error}",
+                    parent_dir.display()
+                ),
+            };
         }
-        None => {}
     }
 
     match runner(&job.input, &job.output) {
