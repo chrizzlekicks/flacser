@@ -6,7 +6,7 @@ use walkdir::WalkDir;
 use crate::config::Config;
 
 pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
-    let input_path = &config.input_path.as_path();
+    let input_path = config.input_path.as_path();
 
     if input_path.is_file() {
         if !is_flac(input_path) {
