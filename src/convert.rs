@@ -1,6 +1,7 @@
 use std::{
     fs,
     path::{Path, PathBuf},
+    sync::Mutex,
 };
 
 use anyhow::Result;
@@ -18,6 +19,27 @@ pub enum JobResult {
     Converted,
     Skipped,
     Failed { input: PathBuf, error: String },
+}
+
+#[derive(Debug)]
+pub struct ProgressReporter {
+    total: usize,
+    done: Mutex<usize>,
+}
+
+impl ProgressReporter {
+    pub fn new(total: usize) -> Self {
+        Self {
+            total,
+            done: Mutex::new(0),
+        }
+    }
+
+    pub fn job_done(&self) {
+        let mut completed = self.done.lock().expect("progress reporter mutex poisoned");
+        *completed += 1;
+        println!("[{}/{}] done", *completed, self.total)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +68,8 @@ fn execute_with_runner(
         };
     }
 
+    let reporter = ProgressReporter::new(jobs.len());
+
     let workers = configured_jobs.min(jobs.len()).max(1);
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(workers)
@@ -54,7 +78,11 @@ fn execute_with_runner(
 
     let results = pool.install(|| {
         jobs.into_par_iter()
-            .map(|job| execute_job(job, overwrite, dry_run, runner))
+            .map(|job| {
+                let result = execute_job(job, overwrite, dry_run, runner);
+                reporter.job_done();
+                result
+            })
             .collect()
     });
 
