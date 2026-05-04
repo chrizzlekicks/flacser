@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/chrizzlekicks/flacser/compare/v0.3.1...v0.3.2) (2026-05-04)
+
+
+### Bug Fixes
+
+* **cli:** show description for flacser root command ([6a5affd](https://github.com/chrizzlekicks/flacser/commit/6a5affd04feaa59670db84476a42ad10156a023c))
+
 ## [0.3.1](https://github.com/chrizzlekicks/flacser/compare/v0.3.0...v0.3.1) (2026-05-04)
 
 
