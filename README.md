@@ -72,6 +72,7 @@ flacser convert [OPTIONS] <INPUT_PATH>
 ### Execution and exits
 
 - Runs jobs in parallel using Rayon
+- Prints per-job progress during execution as `[done/total] done`
 - Default jobs: `max(1, cpu_cores - 1)`
 - Summary reports actual workers used for the run
 - Continues processing when individual jobs fail

@@ -34,6 +34,7 @@ CLI → Config → Discover → Plan → Execute → Summarize → Output
 - plan.rs       → map inputs to outputs
 - convert.rs    → execute jobs (Rayon)
 - ffmpeg.rs     → process spawning
+- progress.rs   → track completed jobs and print progress
 - summary.rs    → aggregate results
 - main.rs       → orchestration
 
@@ -104,6 +105,7 @@ Output: Vec<ConversionJob>
 
 - run jobs in parallel (Rayon)
 - each job is independent
+- report completed-job progress as work finishes
 - collect JobResult
 
 ---
@@ -188,7 +190,6 @@ Future additions:
 
 - flatten mode
 - fail-fast mode
-- progress reporting
 - GUI (e.g. Tauri)
 
 ---
