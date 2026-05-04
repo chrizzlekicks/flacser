@@ -1,4 +1,7 @@
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 
@@ -79,16 +82,16 @@ fn execute_job(
         return JobResult::Converted;
     }
 
-    if let Some(parent_dir) = job.output.parent() {
-        if let Err(error) = fs::create_dir_all(parent_dir) {
-            return JobResult::Failed {
-                input: job.input,
-                error: format!(
-                    "failed to create output directory {}: {error}",
-                    parent_dir.display()
-                ),
-            };
-        }
+    if let Some(parent_dir) = job.output.parent()
+        && let Err(error) = fs::create_dir_all(parent_dir)
+    {
+        return JobResult::Failed {
+            input: job.input,
+            error: format!(
+                "failed to create output directory {}: {error}",
+                parent_dir.display()
+            ),
+        };
     }
 
     match runner(&job.input, &job.output) {

@@ -1,4 +1,4 @@
-use  std::sync::Mutex;
+use std::sync::Mutex;
 
 /// Tracks and reports completed conversion jobs.
 #[derive(Debug)]
