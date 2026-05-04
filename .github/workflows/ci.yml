@@ -27,7 +27,7 @@ jobs:
       uses: Swatinem/rust-cache@v2
         
     - name: Linting
-      uses: cargo clippy -- -D warnings
+      run: cargo clippy -- -D warnings
 
     - name: Check formatting
       run: cargo fmt --all -- --check
