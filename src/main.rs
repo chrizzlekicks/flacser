@@ -4,6 +4,7 @@ mod convert;
 mod discover;
 mod ffmpeg;
 mod plan;
+mod progress;
 mod summary;
 
 use anyhow::Result;

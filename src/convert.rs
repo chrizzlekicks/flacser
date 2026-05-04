@@ -1,8 +1,4 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    sync::Mutex,
-};
+use std::{fs, path::{Path, PathBuf}};
 
 use anyhow::Result;
 
@@ -11,6 +7,7 @@ use rayon::prelude::*;
 use crate::config::Config;
 use crate::ffmpeg::run_ffmpeg;
 use crate::plan::ConversionJob;
+use crate::progress::ProgressReporter;
 
 type FfmpegRunner = fn(&Path, &Path) -> Result<()>;
 
@@ -19,27 +16,6 @@ pub enum JobResult {
     Converted,
     Skipped,
     Failed { input: PathBuf, error: String },
-}
-
-#[derive(Debug)]
-pub struct ProgressReporter {
-    total: usize,
-    done: Mutex<usize>,
-}
-
-impl ProgressReporter {
-    pub fn new(total: usize) -> Self {
-        Self {
-            total,
-            done: Mutex::new(0),
-        }
-    }
-
-    pub fn job_done(&self) {
-        let mut completed = self.done.lock().expect("progress reporter mutex poisoned");
-        *completed += 1;
-        println!("[{}/{}] done", *completed, self.total)
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -80,7 +56,7 @@ fn execute_with_runner(
         jobs.into_par_iter()
             .map(|job| {
                 let result = execute_job(job, overwrite, dry_run, runner);
-                reporter.job_done();
+                reporter.finish_job();
                 result
             })
             .collect()
