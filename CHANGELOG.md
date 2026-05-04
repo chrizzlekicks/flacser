@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/chrizzlekicks/flacser/compare/v0.2.0...v0.3.0) (2026-05-04)
+
+
+### Features
+
+* **flacser:** add conversion job progress ([0d064af](https://github.com/chrizzlekicks/flacser/commit/0d064af013b3eebc72dabc60258a7716e4b91cdd))
+
 ## [0.2.0](https://github.com/chrizzlekicks/flacser/compare/v0.1.0...v0.2.0) (2026-04-27)
 
 
