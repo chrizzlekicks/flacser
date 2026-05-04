@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/chrizzlekicks/flacser/compare/v0.3.0...v0.3.1) (2026-05-04)
+
+
+### Bug Fixes
+
+* **cli:** show descriptions for convert command flags in help ([8c8aa19](https://github.com/chrizzlekicks/flacser/commit/8c8aa1926818c48eb2b1813a5d6346e57bb5d446))
+
 ## [0.3.0](https://github.com/chrizzlekicks/flacser/compare/v0.2.0...v0.3.0) (2026-05-04)
 
 
