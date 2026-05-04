@@ -88,6 +88,24 @@ fn flacser_without_subcommand_shows_usage_and_fails() {
 }
 
 #[test]
+fn flacser_help_shows_basic_contract() {
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("--help")
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("Usage: flacser <COMMAND>"));
+    assert!(stdout.contains("convert"));
+    assert!(stdout.contains("Convert .flac file or directory with multiple .flac files to .aiff"));
+    assert!(stdout.contains("help"));
+    assert!(stdout.contains("Print this message or the help of the given subcommand(s)"));
+    assert!(stdout.contains("-h, --help"));
+    assert!(stdout.contains("Print help"));
+}
+
+#[test]
 fn convert_help_shows_expected_contract() {
     let assert = Command::cargo_bin("flacser")
         .expect("build flacser binary")

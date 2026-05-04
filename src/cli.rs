@@ -12,6 +12,7 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
+    /// Convert .flac file or directory with multiple .flac files to .aiff.
     Convert(ConvertArgs),
 }
 
