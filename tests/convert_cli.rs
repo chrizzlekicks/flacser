@@ -98,11 +98,17 @@ fn convert_help_shows_expected_contract() {
 
     let stdout = stdout_text(&assert);
     assert!(stdout.contains("Usage: flacser convert [OPTIONS] <INPUT_PATH>"));
+    assert!(stdout.contains("Input `.flac` file or directory to convert"));
     assert!(stdout.contains("-o, --output-dir <OUTPUT_DIR>"));
+    assert!(stdout.contains("Write converted `.aiff` files into this directory"));
     assert!(stdout.contains("-w, --overwrite"));
+    assert!(stdout.contains("Replace existing output files instead of skipping them"));
     assert!(stdout.contains("-n, --dry-run"));
+    assert!(stdout.contains("Print the conversion plan without running `ffmpeg`"));
     assert!(stdout.contains("-r, --recursive"));
+    assert!(stdout.contains("Recurse into subdirectories when the input path is a directory"));
     assert!(stdout.contains("-j, --jobs <JOBS>"));
+    assert!(stdout.contains("Limit the number of parallel conversion jobs"));
 }
 
 #[test]

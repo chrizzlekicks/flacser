@@ -17,26 +17,26 @@ pub enum Commands {
 
 #[derive(Debug, clap::Args)]
 pub struct ConvertArgs {
-    // Input file or directory
+    /// Input `.flac` file or directory to convert.
     pub input_path: PathBuf,
 
-    // Output directory
+    /// Write converted `.aiff` files into this directory.
     #[arg(short = 'o', long)]
     pub output_dir: Option<PathBuf>,
 
-    // Overwrite existing outputs
+    /// Replace existing output files instead of skipping them.
     #[arg(short = 'w', long, default_value_t = false)]
     pub overwrite: bool,
 
-    // Dry run (no exec)
+    /// Print the conversion plan without running `ffmpeg`.
     #[arg(short = 'n', long, default_value_t = false)]
     pub dry_run: bool,
 
-    // Recurse into subdirectories in directory mode
+    /// Recurse into subdirectories when the input path is a directory.
     #[arg(short = 'r', long, default_value_t = false)]
     pub recursive: bool,
 
-    // Number of parallel conversion jobs
+    /// Limit the number of parallel conversion jobs.
     #[arg(short = 'j', long)]
     pub jobs: Option<NonZeroUsize>,
 }
