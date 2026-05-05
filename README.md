@@ -45,13 +45,13 @@ flacser convert [OPTIONS] <INPUT_PATH>
 - a single `.flac` file
 - a directory (batch mode)
 
-### Options (v0.1)
+### Options
 
-- `--output-dir <OUTPUT_DIR>`: write outputs into a specific directory
-- `--overwrite`: replace existing outputs
-- `--dry-run`: plan/execute flow without running `ffmpeg`
-- `--recursive`: recurse into subdirectories in directory mode
-- `--jobs <JOBS>`: set the number of parallel conversion jobs
+- `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: write outputs into a specific directory
+- `--overwrite, -w`: replace existing outputs
+- `--dry-run, -n`: plan/execute flow without running `ffmpeg`
+- `--recursive, -r`: recurse into subdirectories in directory mode
+- `--jobs <JOBS>, -j <JOBS>`: set the number of parallel conversion jobs
 
 ## Behavior
 
