@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/chrizzlekicks/flacser/compare/v0.3.2...v0.3.3) (2026-05-06)
+
+
+### Bug Fixes
+
+* check ffmpeg availability before conversion ([014b8bf](https://github.com/chrizzlekicks/flacser/commit/014b8bfeb9856f689928b8e7bc1c9f3ca63b16eb))
+
 ## [0.3.2](https://github.com/chrizzlekicks/flacser/compare/v0.3.1...v0.3.2) (2026-05-04)
 
 
