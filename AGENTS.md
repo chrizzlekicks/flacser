@@ -64,10 +64,12 @@ Pipeline:
 Modules:
 
 - cli
+- config
 - discover
 - plan
 - convert
 - ffmpeg
+- progress
 - summary
 
 Keep CLI separate from core logic.

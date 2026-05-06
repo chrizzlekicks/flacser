@@ -190,6 +190,8 @@ Future additions:
 
 - flatten mode
 - fail-fast mode
+- doctor mode
+- support conversion to `.wav`
 - GUI (e.g. Tauri)
 
 ---
