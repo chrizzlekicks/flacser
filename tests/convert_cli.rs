@@ -33,7 +33,12 @@ fn prepend_path(bin_dir: &Path) -> std::ffi::OsString {
 #[cfg(unix)]
 fn install_fake_ffmpeg_script(dir: &Path, script_body: &str) {
     let ffmpeg_path = dir.join("ffmpeg");
-    fs::write(&ffmpeg_path, script_body).expect("write fake ffmpeg");
+    let script_body = script_body
+        .strip_prefix("#!/bin/sh\n")
+        .unwrap_or(script_body);
+    let script =
+        format!("#!/bin/sh\nif [ \"${{1:-}}\" = \"-version\" ]; then\n  exit 0\nfi\n{script_body}");
+    fs::write(&ffmpeg_path, script).expect("write fake ffmpeg");
     let mut perms = fs::metadata(&ffmpeg_path)
         .expect("stat fake ffmpeg")
         .permissions();
@@ -58,13 +63,16 @@ fn convert_missing_path_exits_non_zero() {
 fn convert_single_file_dry_run_succeeds_without_ffmpeg() {
     let tmp = TempDir::new().expect("create temp dir");
     let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
     write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
 
     let assert = Command::cargo_bin("flacser")
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
         .arg("--dry-run")
+        .env("PATH", &bin_dir)
         .assert()
         .success();
 
@@ -73,6 +81,32 @@ fn convert_single_file_dry_run_succeeds_without_ffmpeg() {
     assert!(stdout.contains("total=1"));
     assert!(stdout.contains("converted=1"));
     assert!(stdout.contains("failed=0"));
+}
+
+#[test]
+fn convert_missing_ffmpeg_exits_non_zero_with_install_instructions() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .env("PATH", &bin_dir)
+        .assert()
+        .failure();
+
+    let stdout = stdout_text(&assert);
+    let stderr = stderr_text(&assert);
+    assert!(!stdout.contains("Summary:"));
+    assert!(stderr.contains("ffmpeg not found."));
+    assert!(stderr.contains("Install it with:"));
+    assert!(stderr.contains("Arch:   sudo pacman -S ffmpeg"));
+    assert!(stderr.contains("Ubuntu: sudo apt install ffmpeg"));
+    assert!(stderr.contains("macOS:  brew install ffmpeg"));
 }
 
 #[test]

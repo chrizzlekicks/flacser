@@ -15,6 +15,11 @@ fn main() -> Result<()> {
 
     let inputs = discover::discover(&config)?;
     let jobs = plan::plan(&config, inputs)?;
+
+    if ffmpeg::is_needed(&config, &jobs) {
+        ffmpeg::check_availability()?;
+    }
+
     let report = convert::execute(&config, jobs);
     let summary = summary::Summary::from_report(&report);
 

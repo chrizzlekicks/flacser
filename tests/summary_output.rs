@@ -29,7 +29,12 @@ fn prepend_path(bin_dir: &Path) -> std::ffi::OsString {
 #[cfg(unix)]
 fn install_fake_ffmpeg_script(dir: &Path, script_body: &str) {
     let ffmpeg_path = dir.join("ffmpeg");
-    fs::write(&ffmpeg_path, script_body).expect("write fake ffmpeg");
+    let script_body = script_body
+        .strip_prefix("#!/bin/sh\n")
+        .unwrap_or(script_body);
+    let script =
+        format!("#!/bin/sh\nif [ \"${{1:-}}\" = \"-version\" ]; then\n  exit 0\nfi\n{script_body}");
+    fs::write(&ffmpeg_path, script).expect("write fake ffmpeg");
     let mut perms = fs::metadata(&ffmpeg_path)
         .expect("stat fake ffmpeg")
         .permissions();
