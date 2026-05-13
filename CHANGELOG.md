@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/chrizzlekicks/flacser/compare/v0.3.3...v0.4.0) (2026-05-13)
+
+
+### Features
+
+* **flacser:** add atomic single writes and graceful interruption handling ([1046207](https://github.com/chrizzlekicks/flacser/commit/1046207074d07acf270a4804890bb510ce50e815))
+
 ## [0.3.3](https://github.com/chrizzlekicks/flacser/compare/v0.3.2...v0.3.3) (2026-05-06)
 
 
