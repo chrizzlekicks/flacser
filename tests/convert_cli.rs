@@ -1,5 +1,12 @@
 use std::{env, fs, path::Path};
 
+#[cfg(unix)]
+use std::{
+    process::{Command as StdCommand, Stdio},
+    thread,
+    time::Duration,
+};
+
 use assert_cmd::Command;
 use tempfile::TempDir;
 
@@ -486,6 +493,66 @@ fn convert_returns_non_zero_when_ffmpeg_fails() {
     assert!(stderr.contains("FAILED"));
 }
 
+#[cfg(unix)]
+#[test]
+fn convert_sigint_exits_130_and_removes_partial_temp_output() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    let started = tmp.path().join("started");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    let script = format!(
+        "#!/bin/sh\noutput=\"\"\nfor arg in \"$@\"; do output=\"$arg\"; done\nprintf partial > \"$output\"\ntouch \"{}\"\nsleep 1\nexit 9\n",
+        started.display()
+    );
+    install_fake_ffmpeg_script(&bin_dir, &script);
+    let path = prepend_path(&bin_dir);
+
+    let child = StdCommand::new(assert_cmd::cargo::cargo_bin("flacser"))
+        .arg("convert")
+        .arg(&input)
+        .env("PATH", path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn flacser");
+
+    for _ in 0..50 {
+        if started.exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert!(started.exists(), "fake ffmpeg should have started");
+
+    let status = StdCommand::new("kill")
+        .arg("-INT")
+        .arg(child.id().to_string())
+        .status()
+        .expect("send SIGINT");
+    assert!(status.success());
+
+    let output = child.wait_with_output().expect("wait for flacser");
+
+    assert_eq!(output.status.code(), Some(130));
+    assert!(!tmp.path().join("song.aiff").exists());
+    let temp_files: Vec<_> = fs::read_dir(tmp.path())
+        .expect("read temp dir")
+        .map(|entry| entry.expect("read entry").path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.contains(".flacser-"))
+        })
+        .collect();
+    assert!(
+        temp_files.is_empty(),
+        "temp files left behind: {temp_files:?}"
+    );
+}
+
 #[test]
 fn convert_continues_after_failure_and_reports_partial_batch_failure() {
     let tmp = TempDir::new().expect("create temp dir");
@@ -514,6 +581,8 @@ fn convert_continues_after_failure_and_reports_partial_batch_failure() {
         .arg(&input_dir)
         .arg("--output-dir")
         .arg(&output_dir)
+        .arg("--jobs")
+        .arg("1")
         .env("PATH", path)
         .assert()
         .failure();
@@ -521,10 +590,22 @@ fn convert_continues_after_failure_and_reports_partial_batch_failure() {
     let stdout = stdout_text(&assert);
     let stderr = stderr_text(&assert);
 
-    assert!(stdout.contains("total=2"));
-    assert!(stdout.contains("converted=1"));
-    assert!(stdout.contains("failed=1"));
-    assert!(stderr.contains("FAILED"));
+    assert!(
+        stdout.contains("total=2"),
+        "stdout should contain total=2\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert!(
+        stdout.contains("converted=1"),
+        "stdout should contain converted=1\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert!(
+        stdout.contains("failed=1"),
+        "stdout should contain failed=1\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("FAILED"),
+        "stderr should contain FAILED\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
     assert!(output_dir.join("good.aiff").exists());
     assert!(!output_dir.join("bad.aiff").exists());
 }

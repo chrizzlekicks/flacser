@@ -75,13 +75,17 @@ fn detect_output_collisions(jobs: &Vec<ConversionJob>) -> Result<()> {
     let mut seen: HashMap<&Path, &Path> = HashMap::new();
 
     for job in jobs {
-        if let Some(existing_input) = seen.get(job.output.as_path()) {
-            bail!(
-                "output collision detected: {} and {} both map to {}",
-                existing_input.display(),
-                job.input.display(),
-                job.output.display()
-            );
+        #[expect(clippy::single_match, reason = "match pattern keeps bailing clear")]
+        match seen.get(job.output.as_path()) {
+            Some(existing_input) => {
+                bail!(
+                    "output collision detected: {} and {} both map to {}",
+                    existing_input.display(),
+                    job.input.display(),
+                    job.output.display()
+                );
+            }
+            None => {}
         }
         seen.insert(job.output.as_path(), job.input.as_path());
     }

@@ -1,6 +1,7 @@
 use std::{
     fs,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use anyhow::Result;
@@ -11,6 +12,7 @@ use crate::config::Config;
 use crate::ffmpeg::run_ffmpeg;
 use crate::plan::ConversionJob;
 use crate::progress::ProgressReporter;
+use crate::sigint::SigintFlag;
 
 type FfmpegRunner = fn(&Path, &Path) -> Result<()>;
 
@@ -18,6 +20,7 @@ type FfmpegRunner = fn(&Path, &Path) -> Result<()>;
 pub enum JobResult {
     Converted,
     Skipped,
+    Interrupted { input: PathBuf },
     Failed { input: PathBuf, error: String },
 }
 
@@ -25,16 +28,18 @@ pub enum JobResult {
 pub struct ExecutionReport {
     pub results: Vec<JobResult>,
     pub workers: usize,
+    pub interrupted: bool,
 }
 
-pub fn execute(config: &Config, jobs: Vec<ConversionJob>) -> ExecutionReport {
-    execute_with_runner(config, jobs, run_ffmpeg)
+pub fn execute(config: &Config, jobs: Vec<ConversionJob>, sigint: &SigintFlag) -> ExecutionReport {
+    execute_with_runner(config, jobs, run_ffmpeg, sigint)
 }
 
 fn execute_with_runner(
     config: &Config,
     jobs: Vec<ConversionJob>,
     runner: FfmpegRunner,
+    sigint: &SigintFlag,
 ) -> ExecutionReport {
     let configured_jobs = config.jobs;
     let overwrite = config.overwrite;
@@ -44,6 +49,7 @@ fn execute_with_runner(
         return ExecutionReport {
             results: Vec::new(),
             workers: 0,
+            interrupted: sigint.is_interrupted(),
         };
     }
 
@@ -55,17 +61,56 @@ fn execute_with_runner(
         .build()
         .expect("failed to build rayon threadpool");
 
-    let results = pool.install(|| {
+    let results: Vec<JobResult> = pool.install(|| {
         jobs.into_par_iter()
             .map(|job| {
-                let result = execute_job(job, overwrite, dry_run, runner);
+                let result = if sigint.is_interrupted() {
+                    JobResult::Interrupted { input: job.input }
+                } else {
+                    execute_job(job, overwrite, dry_run, runner)
+                };
                 reporter.finish_job();
                 result
             })
             .collect()
     });
 
-    ExecutionReport { results, workers }
+    let interrupted = sigint.is_interrupted()
+        || results
+            .iter()
+            .any(|result| matches!(result, JobResult::Interrupted { .. }));
+
+    ExecutionReport {
+        results,
+        workers,
+        interrupted,
+    }
+}
+
+fn temp_output_path(output: &Path) -> PathBuf {
+    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    let id = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    let file_name = output
+        .file_name()
+        .expect("planned output path should have a file name");
+
+    let mut temp_file_name = format!(".{}.flacser-{pid}-{id}", file_name.to_string_lossy());
+
+    #[expect(
+        clippy::single_match,
+        reason = "match keeps both Option cases explicit in this path-building helper"
+    )]
+    match output.extension() {
+        Some(extension) => {
+            temp_file_name.push('.');
+            temp_file_name.push_str(&extension.to_string_lossy());
+        }
+        None => {}
+    }
+
+    output.with_file_name(temp_file_name)
 }
 
 fn execute_job(
@@ -94,16 +139,34 @@ fn execute_job(
         };
     }
 
-    match runner(&job.input, &job.output) {
-        Ok(()) => JobResult::Converted,
-        Err(error) => JobResult::Failed {
-            input: job.input.clone(),
-            error: format!(
-                "{} -> {}: {error:#}",
-                job.input.display(),
-                job.output.display()
-            ),
+    let temp_output = temp_output_path(&job.output);
+
+    match runner(&job.input, &temp_output) {
+        Ok(()) => match fs::rename(&temp_output, &job.output) {
+            Ok(()) => JobResult::Converted,
+            Err(error) => {
+                let _ = fs::remove_file(&temp_output);
+                JobResult::Failed {
+                    input: job.input.clone(),
+                    error: format!(
+                        "failed to move temporary output {} to {}: {error}",
+                        temp_output.display(),
+                        job.output.display()
+                    ),
+                }
+            }
         },
+        Err(error) => {
+            let _ = fs::remove_file(&temp_output);
+            JobResult::Failed {
+                input: job.input.clone(),
+                error: format!(
+                    "{} -> {}: {error:#}",
+                    job.input.display(),
+                    job.output.display()
+                ),
+            }
+        }
     }
 }
 
@@ -117,9 +180,9 @@ mod tests {
 
     use anyhow::{Result, anyhow};
 
-    use crate::{config::Config, plan::ConversionJob};
+    use crate::{config::Config, plan::ConversionJob, sigint::SigintFlag};
 
-    use super::{JobResult, execute_with_runner};
+    use super::{JobResult, execute_with_runner, temp_output_path};
 
     fn test_dir(label: &str) -> PathBuf {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -143,12 +206,34 @@ mod tests {
         }
     }
 
-    fn runner_ok(_: &Path, _: &Path) -> Result<()> {
+    fn sigint_flag() -> SigintFlag {
+        SigintFlag::new()
+    }
+
+    fn runner_ok(_: &Path, output: &Path) -> Result<()> {
+        fs::write(output, b"converted")?;
         Ok(())
     }
 
     fn runner_fail(_: &Path, _: &Path) -> Result<()> {
         Err(anyhow!("boom"))
+    }
+
+    fn runner_write_partial_then_fail(_: &Path, output: &Path) -> Result<()> {
+        fs::write(output, b"partial")?;
+        Err(anyhow!("boom"))
+    }
+
+    fn temp_files_in(dir: &Path) -> Vec<PathBuf> {
+        fs::read_dir(dir)
+            .expect("read temp dir")
+            .map(|entry| entry.expect("read entry").path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.contains(".flacser-"))
+            })
+            .collect()
     }
 
     static MKDIR_FAIL_RUNNER_CALLED: std::sync::atomic::AtomicBool =
@@ -175,6 +260,7 @@ mod tests {
                 output,
             }],
             runner_fail,
+            &sigint_flag(),
         );
 
         assert_eq!(report.results.len(), 1);
@@ -200,6 +286,7 @@ mod tests {
                 output,
             }],
             runner_ok,
+            &sigint_flag(),
         );
 
         assert_eq!(report.results.len(), 1);
@@ -220,8 +307,12 @@ mod tests {
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(true, false);
-        let report =
-            execute_with_runner(&config, vec![ConversionJob { input, output }], panic_runner);
+        let report = execute_with_runner(
+            &config,
+            vec![ConversionJob { input, output }],
+            panic_runner,
+            &sigint_flag(),
+        );
 
         assert_eq!(report.results.len(), 1);
         assert!(matches!(report.results[0], JobResult::Converted));
@@ -244,6 +335,7 @@ mod tests {
                 output: output.clone(),
             }],
             runner_fail,
+            &sigint_flag(),
         );
 
         assert_eq!(report.results.len(), 1);
@@ -282,6 +374,7 @@ mod tests {
                 output: output.clone(),
             }],
             runner_mark_called,
+            &sigint_flag(),
         );
 
         assert_eq!(report.results.len(), 1);
@@ -302,6 +395,129 @@ mod tests {
     }
 
     #[test]
+    fn temp_output_path_uses_output_file_name_in_same_directory() {
+        let output = PathBuf::from("album/song.aiff");
+
+        let temp = temp_output_path(&output);
+
+        assert_eq!(temp.parent(), output.parent());
+        let name = temp
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("temp file name should be utf-8 in test");
+        assert!(name.starts_with(".song.aiff.flacser-"));
+        assert!(name.ends_with(".aiff"));
+    }
+
+    #[test]
+    fn successful_conversion_renames_temp_output_to_final_output() {
+        let dir = test_dir("temp-rename-success");
+        let input = dir.join("song.flac");
+        let output = dir.join("song.aiff");
+        fs::write(&input, b"").expect("create input");
+
+        let config = test_config(false, false);
+        let report = execute_with_runner(
+            &config,
+            vec![ConversionJob {
+                input,
+                output: output.clone(),
+            }],
+            runner_ok,
+            &sigint_flag(),
+        );
+
+        assert!(matches!(report.results[0], JobResult::Converted));
+        assert_eq!(fs::read(&output).expect("read final output"), b"converted");
+        assert!(temp_files_in(&dir).is_empty());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn failed_conversion_removes_partial_temp_output_without_final_output() {
+        let dir = test_dir("temp-cleanup-fail");
+        let input = dir.join("song.flac");
+        let output = dir.join("song.aiff");
+        fs::write(&input, b"").expect("create input");
+
+        let config = test_config(false, false);
+        let report = execute_with_runner(
+            &config,
+            vec![ConversionJob {
+                input,
+                output: output.clone(),
+            }],
+            runner_write_partial_then_fail,
+            &sigint_flag(),
+        );
+
+        assert!(matches!(report.results[0], JobResult::Failed { .. }));
+        assert!(!output.exists());
+        assert!(temp_files_in(&dir).is_empty());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn failed_overwrite_preserves_existing_final_output() {
+        let dir = test_dir("temp-overwrite-preserve");
+        let input = dir.join("song.flac");
+        let output = dir.join("song.aiff");
+        fs::write(&input, b"").expect("create input");
+        fs::write(&output, b"old").expect("create existing output");
+
+        let config = test_config(false, true);
+        let report = execute_with_runner(
+            &config,
+            vec![ConversionJob {
+                input,
+                output: output.clone(),
+            }],
+            runner_write_partial_then_fail,
+            &sigint_flag(),
+        );
+
+        assert!(matches!(report.results[0], JobResult::Failed { .. }));
+        assert_eq!(fs::read(&output).expect("read final output"), b"old");
+        assert!(temp_files_in(&dir).is_empty());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn interrupted_execution_does_not_call_runner() {
+        fn panic_runner(_: &Path, _: &Path) -> Result<()> {
+            panic!("runner should not be called after interrupt");
+        }
+
+        let dir = test_dir("interrupted-before-job");
+        let input = dir.join("song.flac");
+        let output = dir.join("song.aiff");
+        fs::write(&input, b"").expect("create input");
+        let sigint = sigint_flag();
+        sigint.interrupt();
+
+        let config = test_config(false, false);
+        let report = execute_with_runner(
+            &config,
+            vec![ConversionJob {
+                input: input.clone(),
+                output,
+            }],
+            panic_runner,
+            &sigint,
+        );
+
+        assert!(report.interrupted);
+        assert!(
+            matches!(&report.results[0], JobResult::Interrupted { input: interrupted_input } if interrupted_input == &input)
+        );
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn execute_successfully_converts_when_runner_succeeds() {
         let dir = test_dir("runner-ok");
         let input = dir.join("song.flac");
@@ -309,7 +525,12 @@ mod tests {
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(false, false);
-        let report = execute_with_runner(&config, vec![ConversionJob { input, output }], runner_ok);
+        let report = execute_with_runner(
+            &config,
+            vec![ConversionJob { input, output }],
+            runner_ok,
+            &sigint_flag(),
+        );
 
         assert_eq!(report.results.len(), 1);
         assert!(matches!(report.results[0], JobResult::Converted));
@@ -320,7 +541,7 @@ mod tests {
     #[test]
     fn execute_reports_zero_workers_for_empty_job_list() {
         let config = test_config(true, false);
-        let report = execute_with_runner(&config, Vec::new(), runner_ok);
+        let report = execute_with_runner(&config, Vec::new(), runner_ok, &sigint_flag());
 
         assert_eq!(report.results.len(), 0);
         assert_eq!(report.workers, 0);
@@ -344,6 +565,7 @@ mod tests {
                 },
             ],
             runner_ok,
+            &sigint_flag(),
         );
 
         assert_eq!(report.results.len(), 2);
