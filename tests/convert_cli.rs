@@ -84,7 +84,7 @@ fn convert_single_file_dry_run_succeeds_without_ffmpeg() {
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("[1/1] done"));
+    assert!(stdout.contains("[1/1] processed"));
     assert!(stdout.contains("total=1"));
     assert!(stdout.contains("converted=1"));
     assert!(stdout.contains("failed=0"));
@@ -252,8 +252,8 @@ fn convert_directory_recurses_when_recursive_is_enabled() {
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("[1/2] done"));
-    assert!(stdout.contains("[2/2] done"));
+    assert!(stdout.contains("[1/2] processed"));
+    assert!(stdout.contains("[2/2] processed"));
     assert!(stdout.contains("total=2"));
     assert!(stdout.contains("converted=2"));
     assert!(stdout.contains("skipped=0"));
@@ -280,8 +280,8 @@ fn convert_directory_recurses_when_recursive_short_flag_is_enabled() {
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("[1/2] done"));
-    assert!(stdout.contains("[2/2] done"));
+    assert!(stdout.contains("[1/2] processed"));
+    assert!(stdout.contains("[2/2] processed"));
     assert!(stdout.contains("total=2"));
     assert!(stdout.contains("converted=2"));
     assert!(stdout.contains("skipped=0"));
@@ -304,7 +304,7 @@ fn convert_accepts_jobs_short_flag() {
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("[1/1] done"));
+    assert!(stdout.contains("[1/1] processed"));
     assert!(stdout.contains("total=1"));
     assert!(stdout.contains("converted=1"));
     assert!(stdout.contains("failed=0"));
@@ -344,7 +344,7 @@ fn convert_empty_directory_succeeds_with_zero_summary() {
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(!stdout.contains(" done\n"));
+    assert!(!stdout.contains(" processed\n"));
     assert!(stdout.contains("total=0"));
     assert!(stdout.contains("converted=0"));
     assert!(stdout.contains("failed=0"));
@@ -367,7 +367,7 @@ fn convert_skips_existing_output() {
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("[1/1] done"));
+    assert!(stdout.contains("[1/1] processed"));
     assert!(stdout.contains("total=1"));
     assert!(stdout.contains("converted=0"));
     assert!(stdout.contains("skipped=1"));

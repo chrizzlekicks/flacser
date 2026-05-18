@@ -61,7 +61,7 @@ fn summary_line_is_stable_for_dry_run_success() {
 
     assert_eq!(
         stdout,
-        "[1/1] done\nSummary: total=1, converted=1, skipped=0, failed=0, workers=1\n"
+        "[1/1] processed\nSummary: total=1, converted=1, skipped=0, failed=0, workers=1\n"
     );
     assert!(stderr.is_empty());
 }
@@ -87,7 +87,7 @@ fn summary_line_is_stable_for_skip_case() {
 
     assert_eq!(
         stdout,
-        "[1/1] done\nSummary: total=1, converted=0, skipped=1, failed=0, workers=1\n"
+        "[1/1] processed\nSummary: total=1, converted=0, skipped=1, failed=0, workers=1\n"
     );
     assert!(stderr.is_empty());
 }
@@ -139,7 +139,7 @@ fn summary_reports_actual_workers_used() {
 
     assert_eq!(
         stdout,
-        "[1/2] done\n[2/2] done\nSummary: total=2, converted=2, skipped=0, failed=0, workers=2\n"
+        "[1/2] processed\n[2/2] processed\nSummary: total=2, converted=2, skipped=0, failed=0, workers=2\n"
     );
     assert!(stderr.is_empty());
 }
@@ -170,7 +170,7 @@ fn failure_prints_summary_to_stdout_and_details_to_stderr() {
 
     assert_eq!(
         stdout,
-        "[1/1] done\nSummary: total=1, converted=0, skipped=0, failed=1, workers=1\n"
+        "[1/1] processed\nSummary: total=1, converted=0, skipped=0, failed=1, workers=1\n"
     );
     assert!(stderr.contains("FAILED"));
     assert!(stderr.contains(&input.display().to_string()));
@@ -214,8 +214,8 @@ fn partial_batch_failure_has_predictable_summary_counts() {
     let stdout = stdout_text(&assert);
     let stderr = stderr_text(&assert);
 
-    assert!(stdout.contains("[1/2] done\n"));
-    assert!(stdout.contains("[2/2] done\n"));
+    assert!(stdout.contains("[1/2] processed\n"));
+    assert!(stdout.contains("[2/2] processed\n"));
     assert!(stdout.ends_with("Summary: total=2, converted=1, skipped=0, failed=1, workers=2\n"));
     assert_eq!(
         stderr
