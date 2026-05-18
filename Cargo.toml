@@ -2,6 +2,12 @@
 name = "flacser"
 version = "0.4.0"
 edition = "2024"
+description = "A fast CLI tool to convert FLAC files to AIFF using ffmpeg"
+license = "MIT"
+repository = "https://github.com/chrizzlekicks/flacser"
+readme = "README.md"
+keywords = ["audio", "flac", "aiff", "ffmpeg", "cli"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
