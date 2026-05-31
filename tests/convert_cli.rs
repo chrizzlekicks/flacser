@@ -144,6 +144,8 @@ fn flacser_help_shows_basic_contract() {
     assert!(stdout.contains("Print this message or the help of the given subcommand(s)"));
     assert!(stdout.contains("-h, --help"));
     assert!(stdout.contains("Print help"));
+    assert!(stdout.contains("-V, --version"));
+    assert!(stdout.contains("Print version"));
 }
 
 #[test]

@@ -3,8 +3,11 @@ use std::{num::NonZeroUsize, path::PathBuf};
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
-#[command(name = "flacser")]
-#[command(about = "Convert .flac files to .aiff with ffmpeg")]
+#[command(
+    name = "flacser",
+    about = "Convert .flac files to .aiff with ffmpeg",
+    version
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
