@@ -2,6 +2,7 @@ mod cli;
 mod config;
 mod convert;
 mod discover;
+mod doctor;
 mod ffmpeg;
 mod plan;
 mod progress;
@@ -11,11 +12,19 @@ mod summary;
 use anyhow::Result;
 
 fn main() -> Result<()> {
+    let cli = cli::parse();
+
+    match cli.command {
+        cli::Commands::Convert(convert) => run_convert(convert),
+        cli::Commands::Doctor(_doctor) => run_doctor(),
+    }
+}
+
+fn run_convert(convert: cli::ConvertArgs) -> Result<()> {
     let sigint = sigint::SigintFlag::new();
     sigint::install_handler(sigint.shared())?;
 
-    let cli = cli::parse();
-    let config = config::resolve(cli)?;
+    let config = config::Config::from_convert_args(convert);
 
     let inputs = discover::discover(&config)?;
     let jobs = plan::plan(&config, inputs)?;
@@ -34,6 +43,17 @@ fn main() -> Result<()> {
     }
 
     if summary.failed > 0 {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+fn run_doctor() -> Result<()> {
+    let report = doctor::run();
+    report.print();
+
+    if !report.is_ready() {
         std::process::exit(1);
     }
 

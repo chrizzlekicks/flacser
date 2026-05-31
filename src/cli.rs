@@ -17,6 +17,9 @@ pub struct Cli {
 pub enum Commands {
     /// Convert .flac file or directory with multiple .flac files to .aiff.
     Convert(ConvertArgs),
+
+    /// Check whether the system is ready to run conversions.
+    Doctor(DoctorArgs),
 }
 
 #[derive(Debug, clap::Args)]
@@ -43,6 +46,12 @@ pub struct ConvertArgs {
     /// Limit the number of parallel conversion jobs.
     #[arg(short = 'j', long)]
     pub jobs: Option<NonZeroUsize>,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct DoctorArgs {
+    /// Optional input path to diagnose before conversion.
+    pub input_path: Option<PathBuf>,
 }
 
 pub fn parse() -> Cli {
