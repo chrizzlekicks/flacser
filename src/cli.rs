@@ -52,6 +52,14 @@ pub struct ConvertArgs {
 pub struct DoctorArgs {
     /// Optional input path to diagnose before conversion.
     pub input_path: Option<PathBuf>,
+
+    /// Diagnose this output directory without creating it.
+    #[arg(short = 'o', long)]
+    pub output_dir: Option<PathBuf>,
+
+    /// Diagnose this parallel conversion job limit.
+    #[arg(short = 'j', long)]
+    pub jobs: Option<NonZeroUsize>,
 }
 
 pub fn parse() -> Cli {

@@ -16,7 +16,7 @@ fn main() -> Result<()> {
 
     match cli.command {
         cli::Commands::Convert(convert) => run_convert(convert),
-        cli::Commands::Doctor(_doctor) => run_doctor(),
+        cli::Commands::Doctor(doctor) => run_doctor(doctor),
     }
 }
 
@@ -49,8 +49,8 @@ fn run_convert(convert: cli::ConvertArgs) -> Result<()> {
     Ok(())
 }
 
-fn run_doctor() -> Result<()> {
-    let report = doctor::run();
+fn run_doctor(doctor: cli::DoctorArgs) -> Result<()> {
+    let report = doctor::run(doctor);
     report.print();
 
     if !report.is_ready() {

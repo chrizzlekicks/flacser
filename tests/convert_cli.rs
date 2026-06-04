@@ -173,8 +173,10 @@ fn doctor_help_shows_expected_contract() {
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("Usage: flacser doctor [INPUT_PATH]"));
+    assert!(stdout.contains("Usage: flacser doctor [OPTIONS] [INPUT_PATH]"));
     assert!(stdout.contains("Optional input path to diagnose before conversion"));
+    assert!(stdout.contains("-o, --output-dir <OUTPUT_DIR>"));
+    assert!(stdout.contains("-j, --jobs <JOBS>"));
 }
 
 #[cfg(unix)]
@@ -204,7 +206,212 @@ fn doctor_succeeds_when_global_checks_pass() {
     assert!(stdout.contains("[ok] default workers:"));
     assert!(stdout.contains("[ok] config sanity: global defaults are sane"));
     assert!(stdout.contains("Read-only: no files were created, modified, or converted."));
+    assert!(stdout.contains("Warnings: no"));
     assert!(stdout.contains("Ready: yes"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_jobs_warning_still_succeeds() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let bin_dir = tmp.path().join("bin");
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+    install_fake_ffmpeg_version_script(
+        &bin_dir,
+        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version 7.1-test\\n'\n  exit 0\nfi\nexit 9\n",
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg("--jobs")
+        .arg("9999")
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[ok] configured workers: 9999"));
+    assert!(stdout.contains("[warn] worker oversubscription:"));
+    assert!(stdout.contains("Warnings: yes"));
+    assert!(stdout.contains("Ready: yes"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_file_input_with_jobs_succeeds_with_fake_ffmpeg() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+    install_fake_ffmpeg_version_script(
+        &bin_dir,
+        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\nexit 9\n",
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg(&input)
+        .arg("--jobs")
+        .arg("1")
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[ok] input type: file"));
+    assert!(stdout.contains("[ok] discoverable files: 1 .flac file(s) found"));
+    assert!(stdout.contains("[ok] planned outputs:"));
+    assert!(stdout.contains("song.aiff"));
+    assert!(stdout.contains("[ok] effective workers: 1"));
+    assert!(stdout.contains("Ready: yes"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_file_input_with_output_dir_succeeds_with_fake_ffmpeg() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let out_dir = tmp.path().join("out");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+    install_fake_ffmpeg_version_script(
+        &bin_dir,
+        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\nexit 9\n",
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg(&input)
+        .arg("--output-dir")
+        .arg(&out_dir)
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[ok] output directory: createable under existing parent:"));
+    assert!(stdout.contains("[ok] planned outputs:"));
+    assert!(stdout.contains("out/song.aiff"));
+    assert!(stdout.contains("Ready: yes"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_output_dir_without_input_runs_output_diagnostics() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let out_dir = tmp.path().join("out");
+    let bin_dir = tmp.path().join("bin");
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+    install_fake_ffmpeg_version_script(
+        &bin_dir,
+        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\nexit 9\n",
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg("--output-dir")
+        .arg(&out_dir)
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[ok] output directory: createable under existing parent:"));
+    assert!(!stdout.contains("input type"));
+    assert!(stdout.contains("Ready: yes"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_empty_directory_exits_non_zero() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let bin_dir = tmp.path().join("bin");
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+    install_fake_ffmpeg_version_script(
+        &bin_dir,
+        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\nexit 9\n",
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg(tmp.path())
+        .env("PATH", path)
+        .assert()
+        .failure();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[fail] discoverable files: 0 .flac files found"));
+    assert!(stdout.contains("Ready: no"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_missing_input_exits_non_zero() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let missing = tmp.path().join("missing");
+    let bin_dir = tmp.path().join("bin");
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+    install_fake_ffmpeg_version_script(
+        &bin_dir,
+        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\nexit 9\n",
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg(&missing)
+        .env("PATH", path)
+        .assert()
+        .failure();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[fail] input exists: not found or not accessible"));
+    assert!(stdout.contains("Ready: no"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_output_path_file_exits_non_zero() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let output_as_file = tmp.path().join("not-a-dir");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    write_file(&output_as_file);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+    install_fake_ffmpeg_version_script(
+        &bin_dir,
+        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\nexit 9\n",
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg(&input)
+        .arg("--output-dir")
+        .arg(&output_as_file)
+        .env("PATH", path)
+        .assert()
+        .failure();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[fail] output directory: exists but is not a directory"));
+    assert!(stdout.contains("[fail] planned outputs: output path exists but is not a directory"));
+    assert!(stdout.contains("Ready: no"));
 }
 
 #[cfg(unix)]
