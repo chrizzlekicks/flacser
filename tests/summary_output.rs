@@ -32,8 +32,9 @@ fn install_fake_ffmpeg_script(dir: &Path, script_body: &str) {
     let script_body = script_body
         .strip_prefix("#!/bin/sh\n")
         .unwrap_or(script_body);
-    let script =
-        format!("#!/bin/sh\nif [ \"${{1:-}}\" = \"-version\" ]; then\n  exit 0\nfi\n{script_body}");
+    let script = format!(
+        "#!/bin/sh\nif [ \"${{1:-}}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\n{script_body}"
+    );
     fs::write(&ffmpeg_path, script).expect("write fake ffmpeg");
     let mut perms = fs::metadata(&ffmpeg_path)
         .expect("stat fake ffmpeg")
