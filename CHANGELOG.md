@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.0](https://github.com/chrizzlekicks/flacser/compare/v0.4.0...v0.5.0) (2026-06-05)
+
+
+### Features
+
+* **flacser:** Add composable doctor diagnostics command ([#8](https://github.com/chrizzlekicks/flacser/issues/8)) ([a107dda](https://github.com/chrizzlekicks/flacser/commit/a107ddac5b57d68a5d9938aef5d7a3483a367d13))
+* **flacser:** add version flag ([88ff839](https://github.com/chrizzlekicks/flacser/commit/88ff839258a2ce76f7827cc7f7f1ceb599bbb9d0))
+* **flacser:** change done progress tag to processed to improve CLI behavior ([6f1cf5d](https://github.com/chrizzlekicks/flacser/commit/6f1cf5de6f029df123d0cafd5b32c3e89f98ff2a))
+
 ## [0.4.0](https://github.com/chrizzlekicks/flacser/compare/v0.3.3...v0.4.0) (2026-05-13)
 
 
