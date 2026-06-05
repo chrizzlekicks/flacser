@@ -2,7 +2,7 @@
 
 `flacser` is a Rust CLI tool that converts `.flac` files to `.aiff` using `ffmpeg`.
 
-It supports single-file conversion and directory batch conversion with parallel execution.
+It supports single-file conversion, directory batch conversion with parallel execution, and a read-only `doctor` command for readiness checks.
 
 ## Requirements
 
@@ -37,21 +37,33 @@ target/release/flacser
 ## Usage
 
 ```bash
-flacser convert [OPTIONS] <INPUT_PATH>
+flacser <COMMAND> [OPTIONS]
 ```
 
-`<INPUT_PATH>` can be:
+### Commands
+
+- `convert [OPTIONS] <INPUT_PATH>`: convert a `.flac` file or directory of `.flac` files
+- `doctor [OPTIONS] [INPUT_PATH]`: check whether the system is ready to run conversions
+
+`<INPUT_PATH>` for `convert` can be:
 
 - a single `.flac` file
 - a directory (batch mode)
 
 ### Options
 
+`convert`:
+
 - `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: write outputs into a specific directory
 - `--overwrite, -w`: replace existing outputs
 - `--dry-run, -n`: plan/execute flow without running `ffmpeg`
 - `--recursive, -r`: recurse into subdirectories in directory mode
 - `--jobs <JOBS>, -j <JOBS>`: set the number of parallel conversion jobs
+
+`doctor`:
+
+- `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: diagnose a specific output directory
+- `--jobs <JOBS>, -j <JOBS>`: diagnose a specific parallel worker limit
 
 ## Behavior
 
@@ -78,6 +90,14 @@ flacser convert [OPTIONS] <INPUT_PATH>
 - Continues processing when individual jobs fail
 - Exits non-zero if any job fails
 
+### Doctor command
+
+- Prints a read-only report with `ok`, `warn`, and `fail` checks
+- Verifies `ffmpeg` availability and version
+- Checks detected CPU cores and default worker settings
+- Optionally validates an input path, output directory, and configured worker limit
+- Exits non-zero when any required check fails
+
 ## Examples
 
 Single file:
@@ -102,6 +122,12 @@ Directory conversion with two parallel jobs:
 
 ```bash
 flacser convert ./music --jobs 2
+```
+
+System readiness check:
+
+```bash
+flacser doctor ./music --output-dir ./out --jobs 2
 ```
 
 ## Testing
