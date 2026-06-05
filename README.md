@@ -43,7 +43,7 @@ flacser <COMMAND> [OPTIONS]
 ### Commands
 
 - `convert [OPTIONS] <INPUT_PATH>`: convert a `.flac` file or directory of `.flac` files
-- `doctor [OPTIONS] [INPUT_PATH]`: check whether the system is ready to run conversions
+- `doctor [OPTIONS] <INPUT_PATH>`: check whether the system is ready to run conversions
 
 `<INPUT_PATH>` for `convert` can be:
 
