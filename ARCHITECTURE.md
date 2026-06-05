@@ -24,6 +24,8 @@ The CLI is a thin layer over a reusable core.
 
 CLI → Config → Discover → Plan → Execute → Summarize → Output
 
+`doctor` is a separate read-only path that probes the environment and, when provided, validates input/output/job-limit inputs without running conversions.
+
 ---
 
 ## Module structure
@@ -36,6 +38,7 @@ CLI → Config → Discover → Plan → Execute → Summarize → Output
 - ffmpeg.rs     → process spawning
 - progress.rs   → track completed jobs and print progress
 - summary.rs    → aggregate results
+- doctor.rs     → readiness checks and environment diagnostics
 - main.rs       → orchestration
 
 ---
@@ -116,6 +119,14 @@ Output: Vec<ConversionJob>
 - print summary
 - determine exit code
 
+### Doctor
+
+- probe `ffmpeg` availability and version
+- check detected CPU cores and default worker calculation
+- optionally validate an input path, output directory, and configured job limit
+- return a read-only report with `ok`, `warn`, and `fail` checks
+- exit non-zero when any required check fails
+
 ---
 
 ## Parallelism
@@ -190,7 +201,6 @@ Future additions:
 
 - flatten mode
 - fail-fast mode
-- doctor mode
 - support conversion to `.wav`
 - GUI (e.g. Tauri)
 
