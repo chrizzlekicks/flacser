@@ -1,10 +1,11 @@
-use std::{env, fs, path::Path};
+mod support;
+
+use std::{fs, path::Path};
 
 use assert_cmd::Command;
 use tempfile::TempDir;
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
+use support::{FakeFfmpeg, install_fake_ffmpeg, prepend_path};
 
 fn write_file(path: &Path) {
     fs::write(path, b"").expect("write test file");
@@ -16,31 +17,6 @@ fn stdout_text(assert: &assert_cmd::assert::Assert) -> String {
 
 fn stderr_text(assert: &assert_cmd::assert::Assert) -> String {
     String::from_utf8_lossy(&assert.get_output().stderr).to_string()
-}
-
-#[cfg(unix)]
-fn prepend_path(bin_dir: &Path) -> std::ffi::OsString {
-    let old_path = env::var_os("PATH").unwrap_or_default();
-    let mut paths = vec![bin_dir.to_path_buf()];
-    paths.extend(env::split_paths(&old_path));
-    env::join_paths(paths).expect("join PATH entries")
-}
-
-#[cfg(unix)]
-fn install_fake_ffmpeg_script(dir: &Path, script_body: &str) {
-    let ffmpeg_path = dir.join("ffmpeg");
-    let script_body = script_body
-        .strip_prefix("#!/bin/sh\n")
-        .unwrap_or(script_body);
-    let script = format!(
-        "#!/bin/sh\nif [ \"${{1:-}}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\n{script_body}"
-    );
-    fs::write(&ffmpeg_path, script).expect("write fake ffmpeg");
-    let mut perms = fs::metadata(&ffmpeg_path)
-        .expect("stat fake ffmpeg")
-        .permissions();
-    perms.set_mode(0o755);
-    fs::set_permissions(&ffmpeg_path, perms).expect("chmod fake ffmpeg");
 }
 
 #[test]
@@ -152,10 +128,7 @@ fn failure_prints_summary_to_stdout_and_details_to_stderr() {
     write_file(&input);
 
     let bin_dir = tmp.path().join("bin");
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-    #[cfg(unix)]
-    install_fake_ffmpeg_script(&bin_dir, "#!/bin/sh\nexit 11\n");
-    #[cfg(unix)]
+    install_fake_ffmpeg(&bin_dir, FakeFfmpeg::ConvertExit { code: 11 });
     let path = prepend_path(&bin_dir);
 
     let assert = Command::cargo_bin("flacser")
@@ -192,12 +165,15 @@ fn partial_batch_failure_has_predictable_summary_counts() {
     write_file(&ok);
     write_file(&bad);
 
-    #[cfg(unix)]
-    install_fake_ffmpeg_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\ninput=\"\"\noutput=\"\"\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = \"-i\" ] && [ $# -ge 2 ]; then\n    input=\"$2\"\n    shift 2\n    continue\n  fi\n  output=\"$1\"\n  shift\ndone\nif [ \"$(basename \"$input\")\" = \"bad.flac\" ]; then\n  exit 19\nfi\nmkdir -p \"$(dirname \"$output\")\"\ntouch \"$output\"\nexit 0\n",
+        FakeFfmpeg::FailOnInputBasename {
+            bad_input: "bad.flac",
+            fail_code: 19,
+            success_contents: "",
+            create_parent: true,
+        },
     );
-    #[cfg(unix)]
     let path = prepend_path(&bin_dir);
 
     let assert = Command::cargo_bin("flacser")

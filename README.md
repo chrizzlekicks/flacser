@@ -22,6 +22,11 @@ sudo apt install ffmpeg
 brew install ffmpeg
 ```
 
+Windows:
+
+- install FFmpeg
+- ensure `ffmpeg.exe` is available on `PATH`
+
 ## Build
 
 ```bash
@@ -142,7 +147,11 @@ Test suite includes:
 
 - unit tests for discover/plan/convert/summary/config logic
 - integration tests for CLI behavior and exit codes
-- integration tests with mocked `ffmpeg` via `PATH`
+- cross-platform integration tests with mocked `ffmpeg` via `PATH`
+
+CI runs the Rust test suite on Ubuntu, Windows, and macOS.
+
+Signal-interruption coverage remains Unix-only.
 
 ## License
 

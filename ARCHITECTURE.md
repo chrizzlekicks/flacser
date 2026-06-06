@@ -110,6 +110,8 @@ Output: Vec<ConversionJob>
 - each job is independent
 - report completed-job progress as work finishes
 - collect JobResult
+- keep integration coverage platform-agnostic where possible via fake `ffmpeg` helpers
+- validate interrupt and signal behavior with Unix-only integration coverage
 
 ---
 

@@ -1,4 +1,6 @@
-use std::{env, fs, path::Path};
+mod support;
+
+use std::{fs, path::Path};
 
 #[cfg(unix)]
 use std::{
@@ -10,8 +12,10 @@ use std::{
 use assert_cmd::Command;
 use tempfile::TempDir;
 
+use support::{FakeFfmpeg, install_fake_ffmpeg, prepend_path};
+
 #[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
+const SIGINT_FAKE_FFMPEG_START_TIMEOUT: Duration = Duration::from_secs(5);
 
 fn write_file(path: &Path) {
     fs::write(path, b"").expect("write test file");
@@ -30,34 +34,16 @@ fn output_text(assert: &assert_cmd::assert::Assert) -> String {
 }
 
 #[cfg(unix)]
-fn prepend_path(bin_dir: &Path) -> std::ffi::OsString {
-    let old_path = env::var_os("PATH").unwrap_or_default();
-    let mut paths = vec![bin_dir.to_path_buf()];
-    paths.extend(env::split_paths(&old_path));
-    env::join_paths(paths).expect("join PATH entries")
-}
+fn install_sigint_fake_ffmpeg(dir: &Path, marker: &Path) {
+    use std::os::unix::fs::PermissionsExt;
 
-#[cfg(unix)]
-fn install_fake_ffmpeg_script(dir: &Path, script_body: &str) {
+    fs::create_dir_all(dir).expect("create fake ffmpeg dir");
     let ffmpeg_path = dir.join("ffmpeg");
-    let script_body = script_body
-        .strip_prefix("#!/bin/sh\n")
-        .unwrap_or(script_body);
     let script = format!(
-        "#!/bin/sh\nif [ \"${{1:-}}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\n{script_body}"
+        "#!/bin/sh\nif [ \"${{1:-}}\" = \"-version\" ]; then\n  printf '%s\\n' 'ffmpeg version test'\n  exit 0\nfi\noutput=\"\"\nfor arg in \"$@\"; do output=\"$arg\"; done\nprintf partial > \"$output\"\ntouch \"{}\"\nsleep 1\nexit 9\n",
+        marker.display()
     );
     fs::write(&ffmpeg_path, script).expect("write fake ffmpeg");
-    let mut perms = fs::metadata(&ffmpeg_path)
-        .expect("stat fake ffmpeg")
-        .permissions();
-    perms.set_mode(0o755);
-    fs::set_permissions(&ffmpeg_path, perms).expect("chmod fake ffmpeg");
-}
-
-#[cfg(unix)]
-fn install_fake_ffmpeg_version_script(dir: &Path, script_body: &str) {
-    let ffmpeg_path = dir.join("ffmpeg");
-    fs::write(&ffmpeg_path, script_body).expect("write fake ffmpeg");
     let mut perms = fs::metadata(&ffmpeg_path)
         .expect("stat fake ffmpeg")
         .permissions();
@@ -179,15 +165,17 @@ fn doctor_help_shows_expected_contract() {
     assert!(stdout.contains("-j, --jobs <JOBS>"));
 }
 
-#[cfg(unix)]
 #[test]
 fn doctor_succeeds_when_global_checks_pass() {
     let tmp = TempDir::new().expect("create temp dir");
     let bin_dir = tmp.path().join("bin");
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-    install_fake_ffmpeg_version_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version 7.1-test\\nconfiguration: test\\n'\n  exit 0\nfi\nexit 9\n",
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version 7.1-test",
+            extra_version_output: &["configuration: test"],
+            non_version_exit: 9,
+        },
     );
     let path = prepend_path(&bin_dir);
 
@@ -210,15 +198,17 @@ fn doctor_succeeds_when_global_checks_pass() {
     assert!(stdout.contains("Ready: yes"));
 }
 
-#[cfg(unix)]
 #[test]
 fn doctor_jobs_warning_still_succeeds() {
     let tmp = TempDir::new().expect("create temp dir");
     let bin_dir = tmp.path().join("bin");
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-    install_fake_ffmpeg_version_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version 7.1-test\\n'\n  exit 0\nfi\nexit 9\n",
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version 7.1-test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
     );
     let path = prepend_path(&bin_dir);
 
@@ -238,17 +228,19 @@ fn doctor_jobs_warning_still_succeeds() {
     assert!(stdout.contains("Ready: yes"));
 }
 
-#[cfg(unix)]
 #[test]
 fn doctor_file_input_with_jobs_succeeds_with_fake_ffmpeg() {
     let tmp = TempDir::new().expect("create temp dir");
     let input = tmp.path().join("song.flac");
     let bin_dir = tmp.path().join("bin");
     write_file(&input);
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-    install_fake_ffmpeg_version_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\nexit 9\n",
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
     );
     let path = prepend_path(&bin_dir);
 
@@ -271,7 +263,6 @@ fn doctor_file_input_with_jobs_succeeds_with_fake_ffmpeg() {
     assert!(stdout.contains("Ready: yes"));
 }
 
-#[cfg(unix)]
 #[test]
 fn doctor_file_input_with_output_dir_succeeds_with_fake_ffmpeg() {
     let tmp = TempDir::new().expect("create temp dir");
@@ -279,10 +270,13 @@ fn doctor_file_input_with_output_dir_succeeds_with_fake_ffmpeg() {
     let out_dir = tmp.path().join("out");
     let bin_dir = tmp.path().join("bin");
     write_file(&input);
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-    install_fake_ffmpeg_version_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\nexit 9\n",
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
     );
     let path = prepend_path(&bin_dir);
 
@@ -299,20 +293,22 @@ fn doctor_file_input_with_output_dir_succeeds_with_fake_ffmpeg() {
     let stdout = stdout_text(&assert);
     assert!(stdout.contains("[ok] output directory: createable under existing parent:"));
     assert!(stdout.contains("[ok] planned outputs:"));
-    assert!(stdout.contains("out/song.aiff"));
+    assert!(stdout.contains(&out_dir.join("song.aiff").display().to_string()));
     assert!(stdout.contains("Ready: yes"));
 }
 
-#[cfg(unix)]
 #[test]
 fn doctor_output_dir_without_input_runs_output_diagnostics() {
     let tmp = TempDir::new().expect("create temp dir");
     let out_dir = tmp.path().join("out");
     let bin_dir = tmp.path().join("bin");
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-    install_fake_ffmpeg_version_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\nexit 9\n",
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
     );
     let path = prepend_path(&bin_dir);
 
@@ -331,15 +327,17 @@ fn doctor_output_dir_without_input_runs_output_diagnostics() {
     assert!(stdout.contains("Ready: yes"));
 }
 
-#[cfg(unix)]
 #[test]
 fn doctor_empty_directory_exits_non_zero() {
     let tmp = TempDir::new().expect("create temp dir");
     let bin_dir = tmp.path().join("bin");
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-    install_fake_ffmpeg_version_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\nexit 9\n",
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
     );
     let path = prepend_path(&bin_dir);
 
@@ -356,16 +354,18 @@ fn doctor_empty_directory_exits_non_zero() {
     assert!(stdout.contains("Ready: no"));
 }
 
-#[cfg(unix)]
 #[test]
 fn doctor_missing_input_exits_non_zero() {
     let tmp = TempDir::new().expect("create temp dir");
     let missing = tmp.path().join("missing");
     let bin_dir = tmp.path().join("bin");
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-    install_fake_ffmpeg_version_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\nexit 9\n",
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
     );
     let path = prepend_path(&bin_dir);
 
@@ -382,7 +382,6 @@ fn doctor_missing_input_exits_non_zero() {
     assert!(stdout.contains("Ready: no"));
 }
 
-#[cfg(unix)]
 #[test]
 fn doctor_output_path_file_exits_non_zero() {
     let tmp = TempDir::new().expect("create temp dir");
@@ -391,10 +390,13 @@ fn doctor_output_path_file_exits_non_zero() {
     let bin_dir = tmp.path().join("bin");
     write_file(&input);
     write_file(&output_as_file);
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-    install_fake_ffmpeg_version_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf 'ffmpeg version test\\n'\n  exit 0\nfi\nexit 9\n",
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
     );
     let path = prepend_path(&bin_dir);
 
@@ -414,13 +416,10 @@ fn doctor_output_path_file_exits_non_zero() {
     assert!(stdout.contains("Ready: no"));
 }
 
-#[cfg(unix)]
 #[test]
 fn doctor_fails_when_ffmpeg_is_missing() {
     let tmp = TempDir::new().expect("create temp dir");
     let bin_dir = tmp.path().join("bin");
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-
     let assert = Command::cargo_bin("flacser")
         .expect("build flacser binary")
         .arg("doctor")
@@ -437,15 +436,16 @@ fn doctor_fails_when_ffmpeg_is_missing() {
     assert!(stdout.contains("Ready: no"));
 }
 
-#[cfg(unix)]
 #[test]
 fn doctor_fails_when_ffmpeg_version_is_unreadable() {
     let tmp = TempDir::new().expect("create temp dir");
     let bin_dir = tmp.path().join("bin");
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-    install_fake_ffmpeg_version_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  exit 42\nfi\nexit 9\n",
+        FakeFfmpeg::VersionOnlyExit {
+            version_exit_code: 42,
+            non_version_exit: 9,
+        },
     );
     let path = prepend_path(&bin_dir);
 
@@ -701,13 +701,14 @@ fn convert_overwrite_converts_existing_output() {
     fs::write(&output, b"old").expect("write existing output");
     fs::create_dir_all(&bin_dir).expect("create bin dir");
 
-    #[cfg(unix)]
-    install_fake_ffmpeg_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\noutput=\"\"\nfor arg in \"$@\"; do output=\"$arg\"; done\nprintf new > \"$output\"\nexit 0\n",
+        FakeFfmpeg::WriteOutput {
+            contents: "new",
+            create_parent: false,
+        },
     );
 
-    #[cfg(unix)]
     let path = prepend_path(&bin_dir);
 
     let assert = Command::cargo_bin("flacser")
@@ -757,13 +758,14 @@ fn convert_single_file_writes_to_output_dir_with_mocked_ffmpeg() {
     write_file(&input);
     fs::create_dir_all(&bin_dir).expect("create bin dir");
 
-    #[cfg(unix)]
-    install_fake_ffmpeg_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\noutput=\"\"\nfor arg in \"$@\"; do output=\"$arg\"; done\nmkdir -p \"$(dirname \"$output\")\"\ntouch \"$output\"\nexit 0\n",
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: true,
+        },
     );
 
-    #[cfg(unix)]
     let path = prepend_path(&bin_dir);
 
     let assert = Command::cargo_bin("flacser")
@@ -790,10 +792,7 @@ fn convert_returns_non_zero_when_ffmpeg_fails() {
     write_file(&input);
 
     let bin_dir = tmp.path().join("bin");
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-    #[cfg(unix)]
-    install_fake_ffmpeg_script(&bin_dir, "#!/bin/sh\nexit 7\n");
-    #[cfg(unix)]
+    install_fake_ffmpeg(&bin_dir, FakeFfmpeg::ConvertExit { code: 7 });
     let new_path = prepend_path(&bin_dir);
 
     let assert = Command::cargo_bin("flacser")
@@ -820,14 +819,10 @@ fn convert_sigint_exits_130_and_removes_partial_temp_output() {
     write_file(&input);
     fs::create_dir_all(&bin_dir).expect("create bin dir");
 
-    let script = format!(
-        "#!/bin/sh\noutput=\"\"\nfor arg in \"$@\"; do output=\"$arg\"; done\nprintf partial > \"$output\"\ntouch \"{}\"\nsleep 1\nexit 9\n",
-        started.display()
-    );
-    install_fake_ffmpeg_script(&bin_dir, &script);
+    install_sigint_fake_ffmpeg(&bin_dir, &started);
     let path = prepend_path(&bin_dir);
 
-    let child = StdCommand::new(assert_cmd::cargo::cargo_bin("flacser"))
+    let mut child = StdCommand::new(assert_cmd::cargo::cargo_bin("flacser"))
         .arg("convert")
         .arg(&input)
         .env("PATH", path)
@@ -836,9 +831,18 @@ fn convert_sigint_exits_130_and_removes_partial_temp_output() {
         .spawn()
         .expect("spawn flacser");
 
-    for _ in 0..50 {
+    let start_wait_deadline = std::time::Instant::now() + SIGINT_FAKE_FFMPEG_START_TIMEOUT;
+    while std::time::Instant::now() < start_wait_deadline {
         if started.exists() {
             break;
+        }
+        if let Some(status) = child.try_wait().expect("poll flacser child") {
+            let output = child.wait_with_output().expect("collect flacser output");
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            panic!(
+                "flacser exited before fake ffmpeg started with status {status}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+            );
         }
         thread::sleep(Duration::from_millis(20));
     }
@@ -884,12 +888,15 @@ fn convert_continues_after_failure_and_reports_partial_batch_failure() {
     write_file(&good);
     write_file(&bad);
 
-    #[cfg(unix)]
-    install_fake_ffmpeg_script(
+    install_fake_ffmpeg(
         &bin_dir,
-        "#!/bin/sh\ninput=\"\"\noutput=\"\"\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = \"-i\" ] && [ $# -ge 2 ]; then\n    input=\"$2\"\n    shift 2\n    continue\n  fi\n  output=\"$1\"\n  shift\ndone\nif [ \"$(basename \"$input\")\" = \"bad.flac\" ]; then\n  exit 9\nfi\nmkdir -p \"$(dirname \"$output\")\"\ntouch \"$output\"\nexit 0\n",
+        FakeFfmpeg::FailOnInputBasename {
+            bad_input: "bad.flac",
+            fail_code: 9,
+            success_contents: "",
+            create_parent: true,
+        },
     );
-    #[cfg(unix)]
     let path = prepend_path(&bin_dir);
 
     let assert = Command::cargo_bin("flacser")
