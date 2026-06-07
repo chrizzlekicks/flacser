@@ -33,6 +33,15 @@ fn output_text(assert: &assert_cmd::assert::Assert) -> String {
     format!("{}{}", stdout_text(assert), stderr_text(assert))
 }
 
+fn assert_usage(output: &str, usage_suffix: &str) {
+    let without_extension = format!("Usage: flacser {usage_suffix}");
+    let with_extension = format!("Usage: flacser.exe {usage_suffix}");
+    assert!(
+        output.contains(&without_extension) || output.contains(&with_extension),
+        "expected usage line {without_extension:?} or {with_extension:?}\noutput:\n{output}"
+    );
+}
+
 #[cfg(unix)]
 fn install_sigint_fake_ffmpeg(dir: &Path, marker: &Path) {
     use std::os::unix::fs::PermissionsExt;
@@ -122,7 +131,7 @@ fn flacser_without_subcommand_shows_usage_and_fails() {
         .failure();
 
     let output = output_text(&assert);
-    assert!(output.contains("Usage: flacser <COMMAND>"));
+    assert_usage(&output, "<COMMAND>");
     assert!(output.contains("convert"));
     assert!(output.contains("doctor"));
 }
@@ -136,7 +145,7 @@ fn flacser_help_shows_basic_contract() {
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("Usage: flacser <COMMAND>"));
+    assert_usage(&stdout, "<COMMAND>");
     assert!(stdout.contains("convert"));
     assert!(stdout.contains("doctor"));
     assert!(stdout.contains("Convert .flac file or directory with multiple .flac files to .aiff"));
@@ -159,7 +168,7 @@ fn doctor_help_shows_expected_contract() {
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("Usage: flacser doctor [OPTIONS] [INPUT_PATH]"));
+    assert_usage(&stdout, "doctor [OPTIONS] [INPUT_PATH]");
     assert!(stdout.contains("Optional input path to diagnose before conversion"));
     assert!(stdout.contains("-o, --output-dir <OUTPUT_DIR>"));
     assert!(stdout.contains("-j, --jobs <JOBS>"));
@@ -473,7 +482,7 @@ fn convert_help_shows_expected_contract() {
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("Usage: flacser convert [OPTIONS] <INPUT_PATH>"));
+    assert_usage(&stdout, "convert [OPTIONS] <INPUT_PATH>");
     assert!(stdout.contains("Input `.flac` file or directory to convert"));
     assert!(stdout.contains("-o, --output-dir <OUTPUT_DIR>"));
     assert!(stdout.contains("Write converted `.aiff` files into this directory"));
