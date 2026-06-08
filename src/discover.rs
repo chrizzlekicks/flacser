@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use walkdir::WalkDir;
 
+use crate::audio_format::AudioFormat;
 use crate::config::Config;
 
 pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
@@ -42,9 +43,7 @@ pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
 }
 
 fn is_flac(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("flac"))
+    AudioFormat::from_path(path) == Some(AudioFormat::Flac)
 }
 
 #[cfg(test)]
@@ -136,6 +135,22 @@ mod tests {
         let config = test_config(dir.clone());
         let files = discover(&config).expect("discover should succeed");
         assert_eq!(files, vec![a, z]);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn does_not_discover_wav_files() {
+        let dir = test_dir("ignore-wav");
+        let flac = dir.join("song.flac");
+        let wav = dir.join("song.wav");
+
+        fs::write(&flac, b"").expect("create flac");
+        fs::write(&wav, b"").expect("create wav");
+
+        let config = test_config(dir.clone());
+        let files = discover(&config).expect("discover should succeed");
+        assert_eq!(files, vec![flac]);
 
         let _ = fs::remove_dir_all(dir);
     }

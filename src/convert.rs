@@ -8,6 +8,7 @@ use anyhow::Result;
 
 use rayon::prelude::*;
 
+use crate::audio_format::AudioFormat;
 use crate::config::Config;
 use crate::ffmpeg::run_ffmpeg;
 use crate::interrupt::InterruptFlag;
@@ -123,6 +124,9 @@ fn execute_job(
     dry_run: bool,
     runner: FfmpegRunner,
 ) -> JobResult {
+    debug_assert_eq!(job.source_format, AudioFormat::Flac);
+    debug_assert_eq!(job.target_format, AudioFormat::Aiff);
+
     if job.output.exists() && !overwrite {
         return JobResult::Skipped;
     }
@@ -186,7 +190,9 @@ mod tests {
 
     use anyhow::{Result, anyhow};
 
-    use crate::{config::Config, interrupt::InterruptFlag, plan::ConversionJob};
+    use crate::{
+        audio_format::AudioFormat, config::Config, interrupt::InterruptFlag, plan::ConversionJob,
+    };
 
     use super::{JobResult, execute_with_runner, temp_output_path};
 
@@ -272,6 +278,8 @@ mod tests {
             vec![ConversionJob {
                 input: input.clone(),
                 output,
+                source_format: AudioFormat::Flac,
+                target_format: AudioFormat::Aiff,
             }],
             runner_fail,
             &interrupt_flag(),
@@ -298,6 +306,8 @@ mod tests {
             vec![ConversionJob {
                 input: input.clone(),
                 output,
+                source_format: AudioFormat::Flac,
+                target_format: AudioFormat::Aiff,
             }],
             runner_ok,
             &interrupt_flag(),
@@ -323,7 +333,12 @@ mod tests {
         let config = test_config(true, false);
         let report = execute_with_runner(
             &config,
-            vec![ConversionJob { input, output }],
+            vec![ConversionJob {
+                input,
+                output,
+                source_format: AudioFormat::Flac,
+                target_format: AudioFormat::Aiff,
+            }],
             panic_runner,
             &interrupt_flag(),
         );
@@ -347,6 +362,8 @@ mod tests {
             vec![ConversionJob {
                 input: input.clone(),
                 output: output.clone(),
+                source_format: AudioFormat::Flac,
+                target_format: AudioFormat::Aiff,
             }],
             runner_fail,
             &interrupt_flag(),
@@ -386,6 +403,8 @@ mod tests {
             vec![ConversionJob {
                 input: input.clone(),
                 output: output.clone(),
+                source_format: AudioFormat::Flac,
+                target_format: AudioFormat::Aiff,
             }],
             runner_mark_called,
             &interrupt_flag(),
@@ -436,6 +455,8 @@ mod tests {
             vec![ConversionJob {
                 input,
                 output: output.clone(),
+                source_format: AudioFormat::Flac,
+                target_format: AudioFormat::Aiff,
             }],
             runner_ok,
             &interrupt_flag(),
@@ -461,6 +482,8 @@ mod tests {
             vec![ConversionJob {
                 input,
                 output: output.clone(),
+                source_format: AudioFormat::Flac,
+                target_format: AudioFormat::Aiff,
             }],
             runner_write_partial_then_fail,
             &interrupt_flag(),
@@ -487,6 +510,8 @@ mod tests {
             vec![ConversionJob {
                 input,
                 output: output.clone(),
+                source_format: AudioFormat::Flac,
+                target_format: AudioFormat::Aiff,
             }],
             runner_write_partial_then_fail,
             &interrupt_flag(),
@@ -518,6 +543,8 @@ mod tests {
             vec![ConversionJob {
                 input: input.clone(),
                 output,
+                source_format: AudioFormat::Flac,
+                target_format: AudioFormat::Aiff,
             }],
             panic_runner,
             &interrupt,
@@ -545,6 +572,8 @@ mod tests {
                 ConversionJob {
                     input,
                     output: dir.join(format!("song-{id}.aiff")),
+                    source_format: AudioFormat::Flac,
+                    target_format: AudioFormat::Aiff,
                 }
             })
             .collect();
@@ -593,7 +622,12 @@ mod tests {
         let config = test_config(false, false);
         let report = execute_with_runner(
             &config,
-            vec![ConversionJob { input, output }],
+            vec![ConversionJob {
+                input,
+                output,
+                source_format: AudioFormat::Flac,
+                target_format: AudioFormat::Aiff,
+            }],
             runner_ok,
             &interrupt_flag(),
         );
@@ -624,10 +658,14 @@ mod tests {
                 ConversionJob {
                     input: PathBuf::from("first.flac"),
                     output: PathBuf::from("first.aiff"),
+                    source_format: AudioFormat::Flac,
+                    target_format: AudioFormat::Aiff,
                 },
                 ConversionJob {
                     input: PathBuf::from("second.flac"),
                     output: PathBuf::from("second.aiff"),
+                    source_format: AudioFormat::Flac,
+                    target_format: AudioFormat::Aiff,
                 },
             ],
             runner_ok,

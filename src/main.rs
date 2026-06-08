@@ -1,3 +1,4 @@
+mod audio_format;
 mod cli;
 mod config;
 mod convert;

@@ -5,17 +5,22 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 
+use crate::audio_format::AudioFormat;
 use crate::config::Config;
 
 #[derive(Debug, Clone)]
 pub struct ConversionJob {
     pub input: PathBuf,
     pub output: PathBuf,
+    pub source_format: AudioFormat,
+    pub target_format: AudioFormat,
 }
 
 pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>> {
     let original_input = config.input_path.as_path();
     let output_dir = config.output_dir.as_deref();
+    let source_format = AudioFormat::Flac;
+    let target_format = AudioFormat::Aiff;
     validate_output_dir(output_dir)?;
 
     let input_is_directory = original_input.is_dir();
@@ -33,7 +38,7 @@ pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>>
 
                 let root = output_dir.unwrap_or(original_input);
                 let mut output = root.join(relative);
-                output.set_extension("aiff");
+                output.set_extension(target_format.canonical_extension());
                 output
             } else {
                 let file_name = input
@@ -41,13 +46,18 @@ pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>>
                     .with_context(|| format!("input file has no file name: {}", input.display()))?;
 
                 let mut output_file_name = PathBuf::from(file_name);
-                output_file_name.set_extension("aiff");
+                output_file_name.set_extension(target_format.canonical_extension());
 
                 let root = output_dir.unwrap_or_else(|| input.parent().unwrap_or(Path::new(".")));
                 root.join(output_file_name)
             };
 
-            Ok(ConversionJob { input, output })
+            Ok(ConversionJob {
+                input,
+                output,
+                source_format,
+                target_format,
+            })
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -101,7 +111,7 @@ mod tests {
         sync::atomic::{AtomicU64, Ordering},
     };
 
-    use crate::config::Config;
+    use crate::{audio_format::AudioFormat, config::Config};
 
     use super::plan;
 
@@ -136,6 +146,8 @@ mod tests {
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].input, input);
         assert_eq!(jobs[0].output, dir.join("track.aiff"));
+        assert_eq!(jobs[0].source_format, AudioFormat::Flac);
+        assert_eq!(jobs[0].target_format, AudioFormat::Aiff);
 
         let _ = fs::remove_dir_all(dir);
     }
