@@ -795,6 +795,44 @@ fn convert_single_file_writes_to_output_dir_with_mocked_ffmpeg() {
 }
 
 #[test]
+fn convert_handles_paths_with_spaces() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input_dir = tmp.path().join("input files");
+    let output_dir = tmp.path().join("converted files");
+    let bin_dir = tmp.path().join("fake bin");
+    let input = input_dir.join("space song.flac");
+    fs::create_dir_all(&input_dir).expect("create input dir");
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+    write_file(&input);
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: true,
+        },
+    );
+
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("total=1"));
+    assert!(stdout.contains("converted=1"));
+    assert!(stdout.contains("failed=0"));
+    assert!(output_dir.join("space song.aiff").exists());
+}
+
+#[test]
 fn convert_returns_non_zero_when_ffmpeg_fails() {
     let tmp = TempDir::new().expect("create temp dir");
     let input = tmp.path().join("song.flac");

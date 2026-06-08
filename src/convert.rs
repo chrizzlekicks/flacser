@@ -175,7 +175,9 @@ mod tests {
     use std::{
         fs,
         path::{Path, PathBuf},
-        sync::atomic::{AtomicU64, Ordering},
+        sync::atomic::{AtomicU64, AtomicUsize, Ordering},
+        thread,
+        time::Duration,
     };
 
     use anyhow::{Result, anyhow};
@@ -238,9 +240,17 @@ mod tests {
 
     static MKDIR_FAIL_RUNNER_CALLED: std::sync::atomic::AtomicBool =
         std::sync::atomic::AtomicBool::new(false);
+    static INTERRUPT_MID_BATCH_RUNNER_CALLS: AtomicUsize = AtomicUsize::new(0);
 
     fn runner_mark_called(_: &Path, _: &Path) -> Result<()> {
         MKDIR_FAIL_RUNNER_CALLED.store(true, std::sync::atomic::Ordering::Relaxed);
+        Ok(())
+    }
+
+    fn runner_slow_ok(_: &Path, output: &Path) -> Result<()> {
+        INTERRUPT_MID_BATCH_RUNNER_CALLS.fetch_add(1, Ordering::SeqCst);
+        thread::sleep(Duration::from_millis(100));
+        fs::write(output, b"converted")?;
         Ok(())
     }
 
@@ -512,6 +522,58 @@ mod tests {
         assert!(report.interrupted);
         assert!(
             matches!(&report.results[0], JobResult::Interrupted { input: interrupted_input } if interrupted_input == &input)
+        );
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn interrupt_during_batch_leaves_queued_jobs_unstarted() {
+        let dir = test_dir("interrupted-mid-batch");
+        let sigint = sigint_flag();
+        let interrupter_sigint = sigint.shared();
+        INTERRUPT_MID_BATCH_RUNNER_CALLS.store(0, Ordering::SeqCst);
+
+        let jobs: Vec<_> = (0..4)
+            .map(|id| {
+                let input = dir.join(format!("song-{id}.flac"));
+                fs::write(&input, b"").expect("create input");
+                ConversionJob {
+                    input,
+                    output: dir.join(format!("song-{id}.aiff")),
+                }
+            })
+            .collect();
+
+        let interrupter = thread::spawn(move || {
+            while INTERRUPT_MID_BATCH_RUNNER_CALLS.load(Ordering::SeqCst) == 0 {
+                thread::sleep(Duration::from_millis(5));
+            }
+            interrupter_sigint.interrupt();
+        });
+
+        let mut config = test_config(false, false);
+        config.jobs = 1;
+        let report = execute_with_runner(&config, jobs, runner_slow_ok, &sigint);
+
+        interrupter.join().expect("interrupt helper should finish");
+        assert!(report.interrupted);
+        assert_eq!(INTERRUPT_MID_BATCH_RUNNER_CALLS.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            report
+                .results
+                .iter()
+                .filter(|result| matches!(result, JobResult::Converted))
+                .count(),
+            1
+        );
+        assert_eq!(
+            report
+                .results
+                .iter()
+                .filter(|result| matches!(result, JobResult::Interrupted { .. }))
+                .count(),
+            3
         );
 
         let _ = fs::remove_dir_all(dir);
