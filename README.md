@@ -147,11 +147,11 @@ Test suite includes:
 
 - unit tests for discover/plan/convert/summary/config logic
 - integration tests for CLI behavior and exit codes
-- cross-platform integration tests with mocked `ffmpeg` via `PATH`
+- cross-platform integration tests with mocked `ffmpeg` and `PATH` portability helpers
 
 CI runs the Rust test suite on Ubuntu, Windows, and macOS.
 
-Signal-interruption coverage remains Unix-only.
+Interrupt handling is covered by tests; OS signal hookup remains platform-specific.
 
 ## License
 

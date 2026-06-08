@@ -10,9 +10,9 @@ use rayon::prelude::*;
 
 use crate::config::Config;
 use crate::ffmpeg::run_ffmpeg;
+use crate::interrupt::InterruptFlag;
 use crate::plan::ConversionJob;
 use crate::progress::ProgressReporter;
-use crate::sigint::SigintFlag;
 
 type FfmpegRunner = fn(&Path, &Path) -> Result<()>;
 
@@ -31,15 +31,19 @@ pub struct ExecutionReport {
     pub interrupted: bool,
 }
 
-pub fn execute(config: &Config, jobs: Vec<ConversionJob>, sigint: &SigintFlag) -> ExecutionReport {
-    execute_with_runner(config, jobs, run_ffmpeg, sigint)
+pub fn execute(
+    config: &Config,
+    jobs: Vec<ConversionJob>,
+    interrupt: &InterruptFlag,
+) -> ExecutionReport {
+    execute_with_runner(config, jobs, run_ffmpeg, interrupt)
 }
 
 fn execute_with_runner(
     config: &Config,
     jobs: Vec<ConversionJob>,
     runner: FfmpegRunner,
-    sigint: &SigintFlag,
+    interrupt: &InterruptFlag,
 ) -> ExecutionReport {
     let configured_jobs = config.jobs;
     let overwrite = config.overwrite;
@@ -49,7 +53,7 @@ fn execute_with_runner(
         return ExecutionReport {
             results: Vec::new(),
             workers: 0,
-            interrupted: sigint.is_interrupted(),
+            interrupted: interrupt.is_interrupted(),
         };
     }
 
@@ -64,7 +68,7 @@ fn execute_with_runner(
     let results: Vec<JobResult> = pool.install(|| {
         jobs.into_par_iter()
             .map(|job| {
-                let result = if sigint.is_interrupted() {
+                let result = if interrupt.is_interrupted() {
                     JobResult::Interrupted { input: job.input }
                 } else {
                     execute_job(job, overwrite, dry_run, runner)
@@ -75,7 +79,7 @@ fn execute_with_runner(
             .collect()
     });
 
-    let interrupted = sigint.is_interrupted()
+    let interrupted = interrupt.is_interrupted()
         || results
             .iter()
             .any(|result| matches!(result, JobResult::Interrupted { .. }));
@@ -182,7 +186,7 @@ mod tests {
 
     use anyhow::{Result, anyhow};
 
-    use crate::{config::Config, plan::ConversionJob, sigint::SigintFlag};
+    use crate::{config::Config, interrupt::InterruptFlag, plan::ConversionJob};
 
     use super::{JobResult, execute_with_runner, temp_output_path};
 
@@ -208,8 +212,8 @@ mod tests {
         }
     }
 
-    fn sigint_flag() -> SigintFlag {
-        SigintFlag::new()
+    fn interrupt_flag() -> InterruptFlag {
+        InterruptFlag::new()
     }
 
     fn runner_ok(_: &Path, output: &Path) -> Result<()> {
@@ -270,7 +274,7 @@ mod tests {
                 output,
             }],
             runner_fail,
-            &sigint_flag(),
+            &interrupt_flag(),
         );
 
         assert_eq!(report.results.len(), 1);
@@ -296,7 +300,7 @@ mod tests {
                 output,
             }],
             runner_ok,
-            &sigint_flag(),
+            &interrupt_flag(),
         );
 
         assert_eq!(report.results.len(), 1);
@@ -321,7 +325,7 @@ mod tests {
             &config,
             vec![ConversionJob { input, output }],
             panic_runner,
-            &sigint_flag(),
+            &interrupt_flag(),
         );
 
         assert_eq!(report.results.len(), 1);
@@ -345,7 +349,7 @@ mod tests {
                 output: output.clone(),
             }],
             runner_fail,
-            &sigint_flag(),
+            &interrupt_flag(),
         );
 
         assert_eq!(report.results.len(), 1);
@@ -384,7 +388,7 @@ mod tests {
                 output: output.clone(),
             }],
             runner_mark_called,
-            &sigint_flag(),
+            &interrupt_flag(),
         );
 
         assert_eq!(report.results.len(), 1);
@@ -434,7 +438,7 @@ mod tests {
                 output: output.clone(),
             }],
             runner_ok,
-            &sigint_flag(),
+            &interrupt_flag(),
         );
 
         assert!(matches!(report.results[0], JobResult::Converted));
@@ -459,7 +463,7 @@ mod tests {
                 output: output.clone(),
             }],
             runner_write_partial_then_fail,
-            &sigint_flag(),
+            &interrupt_flag(),
         );
 
         assert!(matches!(report.results[0], JobResult::Failed { .. }));
@@ -485,7 +489,7 @@ mod tests {
                 output: output.clone(),
             }],
             runner_write_partial_then_fail,
-            &sigint_flag(),
+            &interrupt_flag(),
         );
 
         assert!(matches!(report.results[0], JobResult::Failed { .. }));
@@ -505,8 +509,8 @@ mod tests {
         let input = dir.join("song.flac");
         let output = dir.join("song.aiff");
         fs::write(&input, b"").expect("create input");
-        let sigint = sigint_flag();
-        sigint.interrupt();
+        let interrupt = interrupt_flag();
+        interrupt.interrupt();
 
         let config = test_config(false, false);
         let report = execute_with_runner(
@@ -516,7 +520,7 @@ mod tests {
                 output,
             }],
             panic_runner,
-            &sigint,
+            &interrupt,
         );
 
         assert!(report.interrupted);
@@ -530,8 +534,8 @@ mod tests {
     #[test]
     fn interrupt_during_batch_leaves_queued_jobs_unstarted() {
         let dir = test_dir("interrupted-mid-batch");
-        let sigint = sigint_flag();
-        let interrupter_sigint = sigint.shared();
+        let interrupt = interrupt_flag();
+        let interrupter_interrupt = interrupt.shared();
         INTERRUPT_MID_BATCH_RUNNER_CALLS.store(0, Ordering::SeqCst);
 
         let jobs: Vec<_> = (0..4)
@@ -549,12 +553,12 @@ mod tests {
             while INTERRUPT_MID_BATCH_RUNNER_CALLS.load(Ordering::SeqCst) == 0 {
                 thread::sleep(Duration::from_millis(5));
             }
-            interrupter_sigint.interrupt();
+            interrupter_interrupt.interrupt();
         });
 
         let mut config = test_config(false, false);
         config.jobs = 1;
-        let report = execute_with_runner(&config, jobs, runner_slow_ok, &sigint);
+        let report = execute_with_runner(&config, jobs, runner_slow_ok, &interrupt);
 
         interrupter.join().expect("interrupt helper should finish");
         assert!(report.interrupted);
@@ -591,7 +595,7 @@ mod tests {
             &config,
             vec![ConversionJob { input, output }],
             runner_ok,
-            &sigint_flag(),
+            &interrupt_flag(),
         );
 
         assert_eq!(report.results.len(), 1);
@@ -603,7 +607,7 @@ mod tests {
     #[test]
     fn execute_reports_zero_workers_for_empty_job_list() {
         let config = test_config(true, false);
-        let report = execute_with_runner(&config, Vec::new(), runner_ok, &sigint_flag());
+        let report = execute_with_runner(&config, Vec::new(), runner_ok, &interrupt_flag());
 
         assert_eq!(report.results.len(), 0);
         assert_eq!(report.workers, 0);
@@ -627,7 +631,7 @@ mod tests {
                 },
             ],
             runner_ok,
-            &sigint_flag(),
+            &interrupt_flag(),
         );
 
         assert_eq!(report.results.len(), 2);

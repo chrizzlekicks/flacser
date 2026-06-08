@@ -15,7 +15,7 @@ use tempfile::TempDir;
 use support::{FakeFfmpeg, install_fake_ffmpeg, prepend_path};
 
 #[cfg(unix)]
-const SIGINT_FAKE_FFMPEG_START_TIMEOUT: Duration = Duration::from_secs(5);
+const INTERRUPT_FAKE_FFMPEG_START_TIMEOUT: Duration = Duration::from_secs(5);
 
 fn write_file(path: &Path) {
     fs::write(path, b"").expect("write test file");
@@ -43,7 +43,7 @@ fn assert_usage(output: &str, usage_suffix: &str) {
 }
 
 #[cfg(unix)]
-fn install_sigint_fake_ffmpeg(dir: &Path, marker: &Path) {
+fn install_interrupt_fake_ffmpeg(dir: &Path, marker: &Path) {
     use std::os::unix::fs::PermissionsExt;
 
     fs::create_dir_all(dir).expect("create fake ffmpeg dir");
@@ -858,7 +858,7 @@ fn convert_returns_non_zero_when_ffmpeg_fails() {
 
 #[cfg(unix)]
 #[test]
-fn convert_sigint_exits_130_and_removes_partial_temp_output() {
+fn convert_interrupt_exits_130_and_removes_partial_temp_output() {
     let tmp = TempDir::new().expect("create temp dir");
     let input = tmp.path().join("song.flac");
     let bin_dir = tmp.path().join("bin");
@@ -866,7 +866,7 @@ fn convert_sigint_exits_130_and_removes_partial_temp_output() {
     write_file(&input);
     fs::create_dir_all(&bin_dir).expect("create bin dir");
 
-    install_sigint_fake_ffmpeg(&bin_dir, &started);
+    install_interrupt_fake_ffmpeg(&bin_dir, &started);
     let path = prepend_path(&bin_dir);
 
     let mut child = StdCommand::new(assert_cmd::cargo::cargo_bin("flacser"))
@@ -878,7 +878,7 @@ fn convert_sigint_exits_130_and_removes_partial_temp_output() {
         .spawn()
         .expect("spawn flacser");
 
-    let start_wait_deadline = std::time::Instant::now() + SIGINT_FAKE_FFMPEG_START_TIMEOUT;
+    let start_wait_deadline = std::time::Instant::now() + INTERRUPT_FAKE_FFMPEG_START_TIMEOUT;
     while std::time::Instant::now() < start_wait_deadline {
         if started.exists() {
             break;

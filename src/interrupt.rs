@@ -5,11 +5,11 @@ use std::sync::{
 
 use anyhow::Result;
 
-pub struct SigintFlag {
+pub struct InterruptFlag {
     interrupted: Arc<AtomicBool>,
 }
 
-impl SigintFlag {
+impl InterruptFlag {
     pub fn new() -> Self {
         Self {
             interrupted: Arc::new(AtomicBool::new(false)),
@@ -31,7 +31,7 @@ impl SigintFlag {
     }
 }
 
-pub fn install_handler(flag: SigintFlag) -> Result<()> {
+pub fn install_handler(flag: InterruptFlag) -> Result<()> {
     ctrlc::set_handler(move || {
         flag.interrupt();
         eprintln!("Interrupt received; stopping after active jobs...");
@@ -42,18 +42,18 @@ pub fn install_handler(flag: SigintFlag) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::SigintFlag;
+    use super::InterruptFlag;
 
     #[test]
     fn new_flag_starts_uninterrupted() {
-        let flag = SigintFlag::new();
+        let flag = InterruptFlag::new();
 
         assert!(!flag.is_interrupted());
     }
 
     #[test]
     fn interrupt_marks_flag_interrupted() {
-        let flag = SigintFlag::new();
+        let flag = InterruptFlag::new();
 
         flag.interrupt();
 
@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn shared_flags_share_state() {
-        let flag = SigintFlag::new();
+        let flag = InterruptFlag::new();
         let shared = flag.shared();
 
         shared.interrupt();

@@ -4,9 +4,9 @@ mod convert;
 mod discover;
 mod doctor;
 mod ffmpeg;
+mod interrupt;
 mod plan;
 mod progress;
-mod sigint;
 mod summary;
 
 use anyhow::Result;
@@ -21,8 +21,8 @@ fn main() -> Result<()> {
 }
 
 fn run_convert(convert: cli::ConvertArgs) -> Result<()> {
-    let sigint = sigint::SigintFlag::new();
-    sigint::install_handler(sigint.shared())?;
+    let interrupt = interrupt::InterruptFlag::new();
+    interrupt::install_handler(interrupt.shared())?;
 
     let config = config::Config::from_convert_args(convert);
 
@@ -33,7 +33,7 @@ fn run_convert(convert: cli::ConvertArgs) -> Result<()> {
         ffmpeg::check_availability()?;
     }
 
-    let report = convert::execute(&config, jobs, &sigint);
+    let report = convert::execute(&config, jobs, &interrupt);
     let summary = summary::Summary::from_report(&report);
 
     summary.print();

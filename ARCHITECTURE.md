@@ -35,6 +35,7 @@ CLI → Config → Discover → Plan → Execute → Summarize → Output
 - discover.rs   → find input files
 - plan.rs       → map inputs to outputs
 - convert.rs    → execute jobs (Rayon)
+- interrupt.rs  → interrupt flag handling and ctrlc handler
 - ffmpeg.rs     → process spawning
 - progress.rs   → track completed jobs and print progress
 - summary.rs    → aggregate results
@@ -111,7 +112,7 @@ Output: Vec<ConversionJob>
 - report completed-job progress as work finishes
 - collect JobResult
 - keep integration coverage platform-agnostic where possible via fake `ffmpeg` helpers
-- validate interrupt and signal behavior with Unix-only integration coverage
+- validate interrupt handling with dedicated coverage for the interrupt flag and signal handler
 
 ---
 
