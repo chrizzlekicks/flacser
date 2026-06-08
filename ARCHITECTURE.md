@@ -32,6 +32,7 @@ CLI → Config → Discover → Plan → Execute → Summarize → Output
 
 - cli.rs        → CLI parsing (clap)
 - config.rs     → resolve flags, env, defaults
+- audio_format.rs → audio format metadata and path detection
 - discover.rs   → find input files
 - plan.rs       → map inputs to outputs
 - convert.rs    → execute jobs (Rayon)
@@ -46,6 +47,21 @@ CLI → Config → Discover → Plan → Execute → Summarize → Output
 
 ## Data model
 
+### AudioFormat
+
+Internal audio format metadata.
+
+enum AudioFormat {
+    Flac,
+    Aiff,
+    Wav,
+}
+
+The current conversion flow still only plans FLAC input to AIFF output.
+`Wav` exists for future support and is not discoverable for conversion yet.
+
+---
+
 ### ConversionJob
 
 Represents one conversion unit.
@@ -53,6 +69,8 @@ Represents one conversion unit.
 struct ConversionJob {
     input: PathBuf,
     output: PathBuf,
+    source_format: AudioFormat,
+    target_format: AudioFormat,
 }
 
 ---
@@ -89,6 +107,7 @@ Input: file or directory
 - file → single entry
 - directory → scan for `.flac` files
 - optional recursion
+- format detection is case-insensitive, but only FLAC is accepted for conversion
 
 Output: Vec<PathBuf>
 
@@ -97,6 +116,7 @@ Output: Vec<PathBuf>
 ### 2. Plan
 
 - derive output paths
+- use the target format canonical extension
 - preserve relative structure
 - validate output directory
 - detect collisions
