@@ -1,5 +1,18 @@
 # AGENTS.md
 
+## Repo overview
+
+- `flacser` is a Rust CLI for converting `.flac` files to `.aiff` with `ffmpeg`.
+- Main commands are `convert` for batch conversion and `doctor` for read-only environment checks.
+
+## Repo structure
+
+- `src/main.rs` wires CLI commands to the conversion and doctor flows.
+- Core conversion logic lives in `src/` modules such as discover, plan, convert, ffmpeg, interrupt, progress, and summary.
+- Integration tests live in `tests/`; see `ARCHITECTURE.md` for deeper design details.
+
+---
+
 ## Coding style
 
 - Prefer simplicity over complexity
@@ -14,9 +27,7 @@
 1. Inspect code
 2. Propose plan
 3. Ask for approval
-4. Implement approved scope only
-
-Do not edit files before a plan is approved.
+4. Implement approved scope only; do not edit files before approval
 
 ---
 
