@@ -8,6 +8,19 @@ repository = "https://github.com/chrizzlekicks/flacser"
 readme = "README.md"
 keywords = ["audio", "flac", "aiff", "ffmpeg", "cli"]
 categories = ["command-line-utilities"]
+exclude = [
+  "Cargo.toml.orig",
+  "AGENTS.md",
+  "ARCHITECTURE.md",
+  "openspec/**",
+  ".codex/**",
+  ".agents/**",
+  ".opencode/**",
+  ".github/**",
+  "release-please-config.json",
+  ".release-please-manifest.json",
+  "scripts/**",
+]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
