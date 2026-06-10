@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/chrizzlekicks/flacser/compare/v0.5.0...v0.5.1) (2026-06-10)
+
+
+### Bug Fixes
+
+* **flacser:** summarize doctor output planning ([39af231](https://github.com/chrizzlekicks/flacser/commit/39af23145f509a9ea955617ab566e3d18aa31abd))
+
 ## [0.5.0](https://github.com/chrizzlekicks/flacser/compare/v0.4.0...v0.5.0) (2026-06-05)
 
 

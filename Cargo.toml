@@ -1,6 +1,6 @@
 [package]
 name = "flacser"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 description = "A fast CLI tool to convert FLAC files to AIFF using ffmpeg"
 license = "MIT"
