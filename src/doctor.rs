@@ -239,18 +239,16 @@ fn add_input_checks(report: &mut DoctorReport, input: &DoctorInput, input_path: 
     let job_count = inputs.len();
     match plan::plan(&config, inputs) {
         Ok(jobs) => {
-            let planned_outputs = jobs
-                .iter()
-                .map(|job| job.output.display().to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            report.push(DoctorCheck::ok("planned outputs", planned_outputs));
+            report.push(DoctorCheck::ok(
+                "output planning",
+                format!("{} output path(s) validated", jobs.len()),
+            ));
             report.push(DoctorCheck::ok(
                 "effective workers",
                 std::cmp::min(job_count, config.jobs).to_string(),
             ));
         }
-        Err(error) => report.push(DoctorCheck::failed("planned outputs", error.to_string())),
+        Err(error) => report.push(DoctorCheck::failed("output planning", error.to_string())),
     }
 }
 
@@ -467,10 +465,9 @@ mod tests {
 
         assert_eq!(check(&report, "input type").detail, "file");
         assert_eq!(check(&report, "discoverable files").status, CheckStatus::Ok);
-        assert!(
-            check(&report, "planned outputs")
-                .detail
-                .contains("song.aiff")
+        assert_eq!(
+            check(&report, "output planning").detail,
+            "1 output path(s) validated"
         );
         assert_eq!(check(&report, "effective workers").detail, "1");
         assert!(report.is_ready());
