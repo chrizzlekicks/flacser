@@ -1,6 +1,6 @@
 [package]
 name = "flacser"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 description = "A fast CLI tool to convert lossless FLAC, AIFF, and WAV files using ffmpeg"
 license = "MIT"
@@ -8,6 +8,19 @@ repository = "https://github.com/chrizzlekicks/flacser"
 readme = "README.md"
 keywords = ["audio", "flac", "aiff", "ffmpeg", "cli"]
 categories = ["command-line-utilities"]
+exclude = [
+  "Cargo.toml.orig",
+  "AGENTS.md",
+  "ARCHITECTURE.md",
+  "openspec/**",
+  ".codex/**",
+  ".agents/**",
+  ".opencode/**",
+  ".github/**",
+  "release-please-config.json",
+  ".release-please-manifest.json",
+  "scripts/**",
+]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

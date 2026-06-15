@@ -445,8 +445,44 @@ fn doctor_file_input_with_output_dir_succeeds_with_fake_ffmpeg() {
 
     let stdout = stdout_text(&assert);
     assert!(stdout.contains("[ok] output directory: createable under existing parent:"));
-    assert!(stdout.contains("[ok] planned outputs:"));
-    assert!(stdout.contains(&out_dir.join("song.aiff").display().to_string()));
+    assert!(stdout.contains("[ok] output planning: 1 output path(s) validated"));
+    assert!(!stdout.contains(&out_dir.join("song.aiff").display().to_string()));
+    assert!(stdout.contains("Ready: yes"));
+}
+
+#[test]
+fn doctor_directory_input_summarizes_planning_without_output_names() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let bin_dir = tmp.path().join("bin");
+    let first = tmp.path().join("first.flac");
+    let second = tmp.path().join("second.flac");
+    write_file(&first);
+    write_file(&second);
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg(tmp.path())
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[ok] input type: directory"));
+    assert!(stdout.contains("[ok] discoverable files: 2 .flac file(s) found"));
+    assert!(stdout.contains("[ok] output planning: 2 output path(s) validated"));
+    assert!(!stdout.contains("first.aiff"));
+    assert!(!stdout.contains("second.aiff"));
+    assert!(stdout.contains("[ok] effective workers: 2"));
     assert!(stdout.contains("Ready: yes"));
 }
 
@@ -565,7 +601,7 @@ fn doctor_output_path_file_exits_non_zero() {
 
     let stdout = stdout_text(&assert);
     assert!(stdout.contains("[fail] output directory: exists but is not a directory"));
-    assert!(stdout.contains("[fail] planned outputs: output path exists but is not a directory"));
+    assert!(stdout.contains("[fail] output planning: output path exists but is not a directory"));
     assert!(stdout.contains("Ready: no"));
 }
 
