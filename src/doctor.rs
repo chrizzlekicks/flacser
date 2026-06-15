@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::{
+    audio_format::AudioFormat,
     cli::DoctorArgs,
     config::{self, Config},
     discover, ffmpeg, plan,
@@ -185,6 +186,7 @@ impl DoctorInput {
             dry_run: true,
             recursive: false,
             jobs: self.jobs.unwrap_or_else(config::default_jobs),
+            target_format: AudioFormat::Aiff,
         }
     }
 }
@@ -222,7 +224,7 @@ fn add_input_checks(report: &mut DoctorReport, input: &DoctorInput, input_path: 
     if inputs.is_empty() {
         report.push(DoctorCheck::failed(
             "discoverable files",
-            "0 .flac files found with non-recursive discovery",
+            "0 supported audio files found with non-recursive discovery",
         ));
         report.push(DoctorCheck::ok("effective workers", "0"));
         return;
@@ -231,7 +233,7 @@ fn add_input_checks(report: &mut DoctorReport, input: &DoctorInput, input_path: 
     report.push(DoctorCheck::ok(
         "discoverable files",
         format!(
-            "{} .flac file(s) found with non-recursive discovery",
+            "{} supported audio file(s) found with non-recursive discovery",
             inputs.len()
         ),
     ));
@@ -491,7 +493,7 @@ mod tests {
         assert!(
             check(&report, "discoverable files")
                 .detail
-                .starts_with("1 .flac")
+                .starts_with("1 supported audio")
         );
         assert_eq!(check(&report, "effective workers").detail, "1");
         assert!(report.is_ready());
@@ -526,9 +528,9 @@ mod tests {
     }
 
     #[test]
-    fn non_flac_file_fails_discovery() {
-        let dir = test_dir("non-flac");
-        let input = dir.join("song.wav");
+    fn unsupported_file_fails_discovery() {
+        let dir = test_dir("unsupported");
+        let input = dir.join("song.mp3");
         fs::write(&input, b"").expect("create input");
 
         let report = diagnose(args(Some(input), None, None), passing_probe, || 8);

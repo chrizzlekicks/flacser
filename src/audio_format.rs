@@ -1,4 +1,6 @@
-use std::{fmt, path::Path};
+use std::{fmt, path::Path, str::FromStr};
+
+use anyhow::{Result, bail};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioFormat {
@@ -8,6 +10,10 @@ pub enum AudioFormat {
 }
 
 impl AudioFormat {
+    pub fn accepted_values() -> &'static str {
+        "flac, aiff, wav"
+    }
+
     pub fn canonical_extension(self) -> &'static str {
         match self {
             Self::Flac => "flac",
@@ -31,6 +37,25 @@ impl AudioFormat {
             Some(Self::Wav)
         } else {
             None
+        }
+    }
+}
+
+impl FromStr for AudioFormat {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Self> {
+        if value.eq_ignore_ascii_case("flac") {
+            Ok(Self::Flac)
+        } else if value.eq_ignore_ascii_case("aiff") {
+            Ok(Self::Aiff)
+        } else if value.eq_ignore_ascii_case("wav") {
+            Ok(Self::Wav)
+        } else {
+            bail!(
+                "unsupported audio format '{value}' (expected one of: {})",
+                Self::accepted_values()
+            )
         }
     }
 }
@@ -96,5 +121,18 @@ mod tests {
         assert_eq!(AudioFormat::Flac.to_string(), "flac");
         assert_eq!(AudioFormat::Aiff.to_string(), "aiff");
         assert_eq!(AudioFormat::Wav.to_string(), "wav");
+    }
+
+    #[test]
+    fn parses_supported_target_values() {
+        assert_eq!("flac".parse::<AudioFormat>().unwrap(), AudioFormat::Flac);
+        assert_eq!("AIFF".parse::<AudioFormat>().unwrap(), AudioFormat::Aiff);
+        assert_eq!("Wav".parse::<AudioFormat>().unwrap(), AudioFormat::Wav);
+    }
+
+    #[test]
+    fn rejects_aif_as_target_value() {
+        let error = "aif".parse::<AudioFormat>().expect_err("parse should fail");
+        assert!(error.to_string().contains("unsupported audio format"));
     }
 }

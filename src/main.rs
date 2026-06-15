@@ -25,7 +25,7 @@ fn run_convert(convert: cli::ConvertArgs) -> Result<()> {
     let interrupt = interrupt::InterruptFlag::new();
     interrupt::install_handler(interrupt.shared())?;
 
-    let config = config::Config::from_convert_args(convert);
+    let config = config::Config::from_convert_args(convert)?;
 
     let inputs = discover::discover(&config)?;
     let jobs = plan::plan(&config, inputs)?;

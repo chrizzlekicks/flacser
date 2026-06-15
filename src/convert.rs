@@ -8,14 +8,13 @@ use anyhow::Result;
 
 use rayon::prelude::*;
 
-use crate::audio_format::AudioFormat;
 use crate::config::Config;
 use crate::ffmpeg::run_ffmpeg;
 use crate::interrupt::InterruptFlag;
 use crate::plan::ConversionJob;
 use crate::progress::ProgressReporter;
 
-type FfmpegRunner = fn(&Path, &Path) -> Result<()>;
+type FfmpegRunner = fn(&ConversionJob, &Path) -> Result<()>;
 
 #[derive(Debug, Clone)]
 pub enum JobResult {
@@ -124,9 +123,6 @@ fn execute_job(
     dry_run: bool,
     runner: FfmpegRunner,
 ) -> JobResult {
-    debug_assert_eq!(job.source_format, AudioFormat::Flac);
-    debug_assert_eq!(job.target_format, AudioFormat::Aiff);
-
     if job.output.exists() && !overwrite {
         return JobResult::Skipped;
     }
@@ -149,7 +145,7 @@ fn execute_job(
 
     let temp_output = temp_output_path(&job.output);
 
-    match runner(&job.input, &temp_output) {
+    match runner(&job, &temp_output) {
         Ok(()) => match fs::rename(&temp_output, &job.output) {
             Ok(()) => JobResult::Converted,
             Err(error) => {
@@ -215,6 +211,7 @@ mod tests {
             dry_run,
             recursive: false,
             jobs: 1,
+            target_format: AudioFormat::Aiff,
         }
     }
 
@@ -222,16 +219,16 @@ mod tests {
         InterruptFlag::new()
     }
 
-    fn runner_ok(_: &Path, output: &Path) -> Result<()> {
+    fn runner_ok(_: &ConversionJob, output: &Path) -> Result<()> {
         fs::write(output, b"converted")?;
         Ok(())
     }
 
-    fn runner_fail(_: &Path, _: &Path) -> Result<()> {
+    fn runner_fail(_: &ConversionJob, _: &Path) -> Result<()> {
         Err(anyhow!("boom"))
     }
 
-    fn runner_write_partial_then_fail(_: &Path, output: &Path) -> Result<()> {
+    fn runner_write_partial_then_fail(_: &ConversionJob, output: &Path) -> Result<()> {
         fs::write(output, b"partial")?;
         Err(anyhow!("boom"))
     }
@@ -252,12 +249,12 @@ mod tests {
         std::sync::atomic::AtomicBool::new(false);
     static INTERRUPT_MID_BATCH_RUNNER_CALLS: AtomicUsize = AtomicUsize::new(0);
 
-    fn runner_mark_called(_: &Path, _: &Path) -> Result<()> {
+    fn runner_mark_called(_: &ConversionJob, _: &Path) -> Result<()> {
         MKDIR_FAIL_RUNNER_CALLED.store(true, std::sync::atomic::Ordering::Relaxed);
         Ok(())
     }
 
-    fn runner_slow_ok(_: &Path, output: &Path) -> Result<()> {
+    fn runner_slow_ok(_: &ConversionJob, output: &Path) -> Result<()> {
         INTERRUPT_MID_BATCH_RUNNER_CALLS.fetch_add(1, Ordering::SeqCst);
         thread::sleep(Duration::from_millis(100));
         fs::write(output, b"converted")?;
@@ -321,7 +318,7 @@ mod tests {
 
     #[test]
     fn execute_dry_run_marks_converted_without_calling_runner() {
-        fn panic_runner(_: &Path, _: &Path) -> Result<()> {
+        fn panic_runner(_: &ConversionJob, _: &Path) -> Result<()> {
             panic!("runner should not be called during dry-run");
         }
 
@@ -526,7 +523,7 @@ mod tests {
 
     #[test]
     fn interrupted_execution_does_not_call_runner() {
-        fn panic_runner(_: &Path, _: &Path) -> Result<()> {
+        fn panic_runner(_: &ConversionJob, _: &Path) -> Result<()> {
             panic!("runner should not be called after interrupt");
         }
 

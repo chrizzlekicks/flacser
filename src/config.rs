@@ -1,6 +1,11 @@
-use std::{num::NonZeroUsize, path::PathBuf, thread};
+use std::{env, num::NonZeroUsize, path::PathBuf, thread};
 
+use anyhow::{Context, Result, bail};
+
+use crate::audio_format::AudioFormat;
 use crate::cli::ConvertArgs;
+
+const CONVERT_TO_ENV: &str = "FLACSER_CONVERT_TO";
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -10,11 +15,14 @@ pub struct Config {
     pub dry_run: bool,
     pub recursive: bool,
     pub jobs: usize,
+    pub target_format: AudioFormat,
 }
 
 impl Config {
-    pub fn from_convert_args(convert: ConvertArgs) -> Self {
-        Self {
+    pub fn from_convert_args(convert: ConvertArgs) -> Result<Self> {
+        let target_format = resolve_target_format(convert.to)?;
+
+        Ok(Self {
             input_path: convert.input_path,
             output_dir: convert.output_dir,
             overwrite: convert.overwrite,
@@ -24,7 +32,24 @@ impl Config {
                 .jobs
                 .map(NonZeroUsize::get)
                 .unwrap_or_else(default_jobs),
+            target_format,
+        })
+    }
+}
+
+fn resolve_target_format(cli_target: Option<AudioFormat>) -> Result<AudioFormat> {
+    if let Some(target) = cli_target {
+        return Ok(target);
+    }
+
+    match env::var(CONVERT_TO_ENV) {
+        Ok(value) => value
+            .parse()
+            .with_context(|| format!("invalid {CONVERT_TO_ENV} value")),
+        Err(env::VarError::NotPresent) => {
+            bail!("target format is required; pass --to <format> or set {CONVERT_TO_ENV}")
         }
+        Err(env::VarError::NotUnicode(_)) => bail!("{CONVERT_TO_ENV} is not valid Unicode"),
     }
 }
 
@@ -55,6 +80,7 @@ mod tests {
     fn from_convert_args_maps_convert_args() {
         let args = ConvertArgs {
             input_path: PathBuf::from("in.flac"),
+            to: Some(crate::audio_format::AudioFormat::Aiff),
             output_dir: Some(PathBuf::from("out")),
             overwrite: true,
             dry_run: true,
@@ -62,7 +88,7 @@ mod tests {
             jobs: NonZeroUsize::new(2),
         };
 
-        let config = Config::from_convert_args(args);
+        let config = Config::from_convert_args(args).expect("config should resolve");
 
         assert_eq!(config.input_path, PathBuf::from("in.flac"));
         assert_eq!(config.output_dir, Some(PathBuf::from("out")));
@@ -70,12 +96,14 @@ mod tests {
         assert!(config.dry_run);
         assert!(config.recursive);
         assert_eq!(config.jobs, 2);
+        assert_eq!(config.target_format, crate::audio_format::AudioFormat::Aiff);
     }
 
     #[test]
     fn default_jobs_is_always_at_least_one() {
         let args = ConvertArgs {
             input_path: PathBuf::from("in.flac"),
+            to: Some(crate::audio_format::AudioFormat::Aiff),
             output_dir: None,
             overwrite: false,
             dry_run: false,
@@ -83,7 +111,7 @@ mod tests {
             jobs: None,
         };
 
-        let config = Config::from_convert_args(args);
+        let config = Config::from_convert_args(args).expect("config should resolve");
         assert!(config.jobs >= 1);
     }
 

@@ -19,14 +19,23 @@ pub struct ConversionJob {
 pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>> {
     let original_input = config.input_path.as_path();
     let output_dir = config.output_dir.as_deref();
-    let source_format = AudioFormat::Flac;
-    let target_format = AudioFormat::Aiff;
+    let target_format = config.target_format;
     validate_output_dir(output_dir)?;
 
     let input_is_directory = original_input.is_dir();
     let jobs = inputs
         .into_iter()
         .map(|input| {
+            let source_format = AudioFormat::from_path(&input)
+                .with_context(|| format!("unsupported input file: {}", input.display()))?;
+
+            if source_format == target_format {
+                bail!(
+                    "source and target formats are both {target_format}; same-format conversion is not supported for {}",
+                    input.display()
+                );
+            }
+
             let output = if input_is_directory {
                 let relative = input.strip_prefix(original_input).with_context(|| {
                     format!(
@@ -81,23 +90,18 @@ fn validate_output_dir(output_dir: Option<&Path>) -> Result<()> {
     }
 }
 
-fn detect_output_collisions(jobs: &Vec<ConversionJob>) -> Result<()> {
+fn detect_output_collisions(jobs: &[ConversionJob]) -> Result<()> {
     let mut seen: HashMap<&Path, &Path> = HashMap::new();
 
     for job in jobs {
-        #[expect(clippy::single_match, reason = "match pattern keeps bailing clear")]
-        match seen.get(job.output.as_path()) {
-            Some(existing_input) => {
-                bail!(
-                    "output collision detected: {} and {} both map to {}",
-                    existing_input.display(),
-                    job.input.display(),
-                    job.output.display()
-                );
-            }
-            None => {}
+        if let Some(existing_input) = seen.insert(job.output.as_path(), job.input.as_path()) {
+            bail!(
+                "output collision detected: {} and {} both map to {}",
+                existing_input.display(),
+                job.input.display(),
+                job.output.display()
+            );
         }
-        seen.insert(job.output.as_path(), job.input.as_path());
     }
 
     Ok(())
@@ -124,7 +128,11 @@ mod tests {
         dir
     }
 
-    fn test_config(input_path: PathBuf, output_dir: Option<PathBuf>) -> Config {
+    fn test_config_to(
+        input_path: PathBuf,
+        output_dir: Option<PathBuf>,
+        target_format: AudioFormat,
+    ) -> Config {
         Config {
             input_path,
             output_dir,
@@ -132,7 +140,12 @@ mod tests {
             dry_run: false,
             recursive: false,
             jobs: 1,
+            target_format,
         }
+    }
+
+    fn test_config(input_path: PathBuf, output_dir: Option<PathBuf>) -> Config {
+        test_config_to(input_path, output_dir, AudioFormat::Aiff)
     }
 
     #[test]
@@ -148,6 +161,83 @@ mod tests {
         assert_eq!(jobs[0].output, dir.join("track.aiff"));
         assert_eq!(jobs[0].source_format, AudioFormat::Flac);
         assert_eq!(jobs[0].target_format, AudioFormat::Aiff);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn single_file_maps_to_target_extension() {
+        let dir = test_dir("target-extension");
+        let input = dir.join("track.flac");
+        fs::write(&input, b"").expect("create input");
+
+        let config = test_config_to(input.clone(), None, AudioFormat::Wav);
+        let jobs = plan(&config, vec![input.clone()]).expect("plan should succeed");
+
+        assert_eq!(jobs[0].output, dir.join("track.wav"));
+        assert_eq!(jobs[0].source_format, AudioFormat::Flac);
+        assert_eq!(jobs[0].target_format, AudioFormat::Wav);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn wav_to_flac_maps_to_flac_output() {
+        let dir = test_dir("wav-to-flac");
+        let input = dir.join("track.wav");
+        fs::write(&input, b"").expect("create input");
+
+        let config = test_config_to(input.clone(), None, AudioFormat::Flac);
+        let jobs = plan(&config, vec![input.clone()]).expect("plan should succeed");
+
+        assert_eq!(jobs[0].output, dir.join("track.flac"));
+        assert_eq!(jobs[0].source_format, AudioFormat::Wav);
+        assert_eq!(jobs[0].target_format, AudioFormat::Flac);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn aiff_to_flac_maps_to_flac_output() {
+        let dir = test_dir("aiff-to-flac");
+        let input = dir.join("track.aiff");
+        fs::write(&input, b"").expect("create input");
+
+        let config = test_config_to(input.clone(), None, AudioFormat::Flac);
+        let jobs = plan(&config, vec![input.clone()]).expect("plan should succeed");
+
+        assert_eq!(jobs[0].output, dir.join("track.flac"));
+        assert_eq!(jobs[0].source_format, AudioFormat::Aiff);
+        assert_eq!(jobs[0].target_format, AudioFormat::Flac);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn aif_input_maps_to_target_extension() {
+        let dir = test_dir("aif-input");
+        let input = dir.join("track.aif");
+        fs::write(&input, b"").expect("create input");
+
+        let config = test_config_to(input.clone(), None, AudioFormat::Wav);
+        let jobs = plan(&config, vec![input.clone()]).expect("plan should succeed");
+
+        assert_eq!(jobs[0].output, dir.join("track.wav"));
+        assert_eq!(jobs[0].source_format, AudioFormat::Aiff);
+        assert_eq!(jobs[0].target_format, AudioFormat::Wav);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn rejects_same_format_conversion() {
+        let dir = test_dir("same-format");
+        let input = dir.join("track.wav");
+        fs::write(&input, b"").expect("create input");
+
+        let config = test_config_to(input.clone(), None, AudioFormat::Wav);
+        let error = plan(&config, vec![input]).expect_err("plan should fail");
+        assert!(error.to_string().contains("same-format conversion"));
 
         let _ = fs::remove_dir_all(dir);
     }

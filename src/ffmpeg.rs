@@ -4,10 +4,13 @@ use std::{
     process::{Command, Stdio},
 };
 
+#[cfg(test)]
+use std::ffi::OsString;
+
 use anyhow::{Context, Result, bail};
 
-use crate::config::Config;
 use crate::plan::ConversionJob;
+use crate::{audio_format::AudioFormat, config::Config};
 
 const FFMPEG_NOT_FOUND: &str = "ffmpeg not found.\n\nInstall it with:\n  Arch:   sudo pacman -S ffmpeg\n  Ubuntu: sudo apt install ffmpeg\n  macOS:  brew install ffmpeg";
 
@@ -120,35 +123,97 @@ pub fn is_needed(config: &Config, jobs: &[ConversionJob]) -> bool {
             .any(|job| config.overwrite || !job.output.exists())
 }
 
-pub fn run_ffmpeg(input: &Path, output: &Path) -> Result<()> {
-    let status =
-        run_ffmpeg_candidate(|candidate| ffmpeg_command(candidate, input, output).status())
-            .with_context(|| format!("failed to spawn ffmpeg for {}", input.display()))?;
+pub fn run_ffmpeg(job: &ConversionJob, output: &Path) -> Result<()> {
+    debug_assert_ne!(job.source_format, job.target_format);
+
+    let status = run_ffmpeg_candidate(|candidate| ffmpeg_command(candidate, job, output).status())
+        .with_context(|| format!("failed to spawn ffmpeg for {}", job.input.display()))?;
 
     if !status.success() {
         bail!(
             "ffmpeg exited with status {} for input {}",
             status,
-            input.display()
+            job.input.display()
         );
     }
 
     Ok(())
 }
 
-fn ffmpeg_command(candidate: &str, input: &Path, output: &Path) -> Command {
+fn ffmpeg_command(candidate: &str, job: &ConversionJob, output: &Path) -> Command {
     let mut command = Command::new(candidate);
     command
         .arg("-nostdin")
         .arg("-i")
-        .arg(input)
+        .arg(&job.input)
         .arg("-map")
-        .arg("0")
-        .arg("-write_id3v2")
-        .arg("1")
-        .arg("-y")
-        .arg("-loglevel")
-        .arg("error")
-        .arg(output);
+        .arg("0");
+
+    if job.target_format == crate::audio_format::AudioFormat::Aiff {
+        command.arg("-write_id3v2").arg("1");
+    }
+
+    if job.target_format == AudioFormat::Flac {
+        command.arg("-c:a").arg("flac");
+    }
+
+    command.arg("-y").arg("-loglevel").arg("error").arg(output);
     command
+}
+
+#[cfg(test)]
+fn command_args(command: &Command) -> Vec<String> {
+    command
+        .get_args()
+        .map(OsString::from)
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    use crate::{audio_format::AudioFormat, plan::ConversionJob};
+
+    use super::{command_args, ffmpeg_command};
+
+    fn job(target_format: AudioFormat) -> ConversionJob {
+        ConversionJob {
+            input: PathBuf::from("input.flac"),
+            output: PathBuf::from("output"),
+            source_format: AudioFormat::Flac,
+            target_format,
+        }
+    }
+
+    #[test]
+    fn builds_flac_codec_args() {
+        let command = ffmpeg_command("ffmpeg", &job(AudioFormat::Flac), Path::new("out.flac"));
+        let args = command_args(&command);
+
+        assert!(args.windows(2).any(|args| args == ["-c:a", "flac"]));
+        assert!(!args.windows(2).any(|args| args == ["-write_id3v2", "1"]));
+        assert_eq!(args.last().map(String::as_str), Some("out.flac"));
+    }
+
+    #[test]
+    fn builds_aiff_args_without_forcing_pcm_codec() {
+        let command = ffmpeg_command("ffmpeg", &job(AudioFormat::Aiff), Path::new("out.aiff"));
+        let args = command_args(&command);
+
+        assert!(!args.iter().any(|arg| arg == "-c:a"));
+        assert!(args.windows(2).any(|args| args == ["-write_id3v2", "1"]));
+        assert_eq!(args.last().map(String::as_str), Some("out.aiff"));
+    }
+
+    #[test]
+    fn builds_wav_args_without_forcing_pcm_codec() {
+        let command = ffmpeg_command("ffmpeg", &job(AudioFormat::Wav), Path::new("out.wav"));
+        let args = command_args(&command);
+
+        assert!(!args.iter().any(|arg| arg == "-c:a"));
+        assert!(!args.windows(2).any(|args| args == ["-write_id3v2", "1"]));
+        assert_eq!(args.last().map(String::as_str), Some("out.wav"));
+    }
 }

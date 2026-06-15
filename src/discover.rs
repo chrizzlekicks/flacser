@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 use walkdir::WalkDir;
@@ -10,8 +10,11 @@ pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
     let input_path = config.input_path.as_path();
 
     if input_path.is_file() {
-        if !is_flac(input_path) {
-            bail!("input file is not a .flac file: {}", input_path.display());
+        if AudioFormat::from_path(input_path).is_none() {
+            bail!(
+                "input file is not a supported audio file (.flac, .aiff, .aif, .wav): {}",
+                input_path.display()
+            );
         }
         return Ok(vec![input_path.to_path_buf()]);
     }
@@ -33,17 +36,13 @@ pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
         if !path.is_file() {
             continue;
         }
-        if is_flac(path) {
+        if AudioFormat::from_path(path).is_some() {
             files.push(path.to_path_buf());
         }
     }
 
     files.sort();
     Ok(files)
-}
-
-fn is_flac(path: &Path) -> bool {
-    AudioFormat::from_path(path) == Some(AudioFormat::Flac)
 }
 
 #[cfg(test)]
@@ -77,6 +76,7 @@ mod tests {
             dry_run: false,
             recursive: false,
             jobs: 1,
+            target_format: crate::audio_format::AudioFormat::Aiff,
         }
     }
 
@@ -88,6 +88,7 @@ mod tests {
             dry_run: false,
             recursive: true,
             jobs: 1,
+            target_format: crate::audio_format::AudioFormat::Aiff,
         }
     }
 
@@ -105,14 +106,18 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_flac_input_file() {
-        let dir = test_dir("reject-non-flac");
-        let input = dir.join("song.wav");
+    fn rejects_unsupported_input_file() {
+        let dir = test_dir("reject-unsupported");
+        let input = dir.join("song.mp3");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(input.clone());
         let error = discover(&config).expect_err("discover should fail");
-        assert!(error.to_string().contains("input file is not a .flac file"));
+        assert!(
+            error
+                .to_string()
+                .contains("input file is not a supported audio file")
+        );
 
         let _ = fs::remove_dir_all(dir);
     }
@@ -140,17 +145,23 @@ mod tests {
     }
 
     #[test]
-    fn does_not_discover_wav_files() {
-        let dir = test_dir("ignore-wav");
+    fn discovers_supported_input_files() {
+        let dir = test_dir("supported-inputs");
         let flac = dir.join("song.flac");
+        let aiff = dir.join("song.aiff");
+        let aif = dir.join("song.aif");
         let wav = dir.join("song.wav");
+        let txt = dir.join("ignore.txt");
 
         fs::write(&flac, b"").expect("create flac");
+        fs::write(&aiff, b"").expect("create aiff");
+        fs::write(&aif, b"").expect("create aif");
         fs::write(&wav, b"").expect("create wav");
+        fs::write(&txt, b"").expect("create txt");
 
         let config = test_config(dir.clone());
         let files = discover(&config).expect("discover should succeed");
-        assert_eq!(files, vec![flac]);
+        assert_eq!(files, vec![aif, aiff, flac, wav]);
 
         let _ = fs::remove_dir_all(dir);
     }

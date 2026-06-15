@@ -1,6 +1,6 @@
 # flacser
 
-`flacser` is a Rust CLI tool that converts `.flac` files to `.aiff` using `ffmpeg`.
+`flacser` is a Rust CLI tool that converts lossless FLAC, AIFF, and WAV files using `ffmpeg`.
 
 It supports single-file conversion, directory batch conversion with parallel execution, and a read-only `doctor` command for readiness checks.
 
@@ -47,18 +47,19 @@ flacser <COMMAND> [OPTIONS]
 
 ### Commands
 
-- `convert [OPTIONS] <INPUT_PATH>`: convert a `.flac` file or directory of `.flac` files
-- `doctor [OPTIONS] <INPUT_PATH>`: check whether the system is ready to run conversions
+- `convert [OPTIONS] <INPUT_PATH> --to <FORMAT>`: convert FLAC, AIFF, or WAV files
+- `doctor [OPTIONS] [INPUT_PATH]`: check whether the system is ready to run conversions
 
 `<INPUT_PATH>` for `convert` can be:
 
-- a single `.flac` file
+- a single `.flac`, `.aiff`, or `.wav` file
 - a directory (batch mode)
 
 ### Options
 
 `convert`:
 
+- `--to <FORMAT>`: target format (`flac`, `aiff`, or `wav`); falls back to `FLACSER_CONVERT_TO`
 - `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: write outputs into a specific directory
 - `--overwrite, -w`: replace existing outputs
 - `--dry-run, -n`: plan/execute flow without running `ffmpeg`
@@ -74,16 +75,19 @@ flacser <COMMAND> [OPTIONS]
 
 ### File mode
 
-- Converts one `.flac` file to `.aiff`
+- Converts one supported `.flac`, `.aiff`, or `.wav` input file to the requested target format
+- Source format is inferred from the file extension case-insensitively
 - Default output path is next to the input file
 - If `--output-dir` is set, output is written there
+- Same-format conversion is rejected
 
 ### Directory mode
 
 - Non-recursive by default (top-level only)
 - Recurses into subdirectories when `--recursive` is set
-- Finds `.flac` files case-insensitively
+- Finds `.flac`, `.aiff`, and `.wav` files case-insensitively
 - Preserves relative structure from the input root
+- Uses the target format's canonical extension; AIFF outputs use `.aiff`
 - Skips outputs that already exist
 
 ### Execution and exits
@@ -108,25 +112,31 @@ flacser <COMMAND> [OPTIONS]
 Single file:
 
 ```bash
-flacser convert ./music/track.flac
+flacser convert ./music/track.flac --to aiff
 ```
 
 Single file with output dir:
 
 ```bash
-flacser convert ./music/track.flac --output-dir ./out
+flacser convert ./music/track.flac --to wav --output-dir ./out
 ```
 
 Directory dry run:
 
 ```bash
-flacser convert ./music --dry-run
+flacser convert ./music --to aiff --dry-run
 ```
 
 Directory conversion with two parallel jobs:
 
 ```bash
-flacser convert ./music --jobs 2
+flacser convert ./music --to flac --jobs 2
+```
+
+Environment fallback target:
+
+```bash
+FLACSER_CONVERT_TO=aiff flacser convert ./music
 ```
 
 System readiness check:

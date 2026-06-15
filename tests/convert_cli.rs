@@ -69,6 +69,8 @@ fn convert_missing_path_exits_non_zero() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&missing)
+        .arg("--to")
+        .arg("aiff")
         .assert()
         .failure();
 }
@@ -85,6 +87,8 @@ fn convert_single_file_dry_run_succeeds_without_ffmpeg() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .env("PATH", &bin_dir)
         .assert()
@@ -109,6 +113,8 @@ fn convert_missing_ffmpeg_exits_non_zero_with_install_instructions() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .env("PATH", &bin_dir)
         .assert()
         .failure();
@@ -121,6 +127,144 @@ fn convert_missing_ffmpeg_exits_non_zero_with_install_instructions() {
     assert!(stderr.contains("Arch:   sudo pacman -S ffmpeg"));
     assert!(stderr.contains("Ubuntu: sudo apt install ffmpeg"));
     assert!(stderr.contains("macOS:  brew install ffmpeg"));
+}
+
+#[test]
+fn convert_without_target_exits_non_zero_with_clear_error() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    write_file(&input);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .env_remove("FLACSER_CONVERT_TO")
+        .assert()
+        .failure();
+
+    let stderr = stderr_text(&assert);
+    assert!(stderr.contains("target format is required"));
+    assert!(stderr.contains("--to <format>"));
+    assert!(stderr.contains("FLACSER_CONVERT_TO"));
+}
+
+#[test]
+fn convert_rejects_invalid_cli_target() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    write_file(&input);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("mp3")
+        .assert()
+        .failure();
+
+    let stderr = stderr_text(&assert);
+    assert!(stderr.contains("unsupported audio format"));
+}
+
+#[test]
+fn convert_uses_env_target_fallback() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: false,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .env("FLACSER_CONVERT_TO", "wav")
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("song.wav").exists());
+}
+
+#[test]
+fn convert_rejects_invalid_env_target() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    write_file(&input);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .env("FLACSER_CONVERT_TO", "mp3")
+        .assert()
+        .failure();
+
+    let stderr = stderr_text(&assert);
+    assert!(stderr.contains("invalid FLACSER_CONVERT_TO value"));
+    assert!(stderr.contains("unsupported audio format"));
+}
+
+#[test]
+fn convert_cli_target_takes_precedence_over_env_target() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: false,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("aiff")
+        .env("FLACSER_CONVERT_TO", "wav")
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("song.aiff").exists());
+    assert!(!tmp.path().join("song.wav").exists());
+}
+
+#[test]
+fn convert_rejects_same_format_conversion() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.wav");
+    write_file(&input);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("wav")
+        .assert()
+        .failure();
+
+    let stderr = stderr_text(&assert);
+    assert!(stderr.contains("same-format conversion is not supported"));
 }
 
 #[test]
@@ -148,7 +292,7 @@ fn flacser_help_shows_basic_contract() {
     assert_usage(&stdout, "<COMMAND>");
     assert!(stdout.contains("convert"));
     assert!(stdout.contains("doctor"));
-    assert!(stdout.contains("Convert .flac file or directory with multiple .flac files to .aiff"));
+    assert!(stdout.contains("Convert FLAC, AIFF, or WAV files to a target lossless format"));
     assert!(stdout.contains("Check whether the system is ready to run conversions"));
     assert!(stdout.contains("help"));
     assert!(stdout.contains("Print this message or the help of the given subcommand(s)"));
@@ -265,7 +409,7 @@ fn doctor_file_input_with_jobs_succeeds_with_fake_ffmpeg() {
 
     let stdout = stdout_text(&assert);
     assert!(stdout.contains("[ok] input type: file"));
-    assert!(stdout.contains("[ok] discoverable files: 1 .flac file(s) found"));
+    assert!(stdout.contains("[ok] discoverable files: 1 supported audio file(s) found"));
     assert!(stdout.contains("[ok] planned outputs:"));
     assert!(stdout.contains("song.aiff"));
     assert!(stdout.contains("[ok] effective workers: 1"));
@@ -359,7 +503,7 @@ fn doctor_empty_directory_exits_non_zero() {
         .failure();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("[fail] discoverable files: 0 .flac files found"));
+    assert!(stdout.contains("[fail] discoverable files: 0 supported audio files found"));
     assert!(stdout.contains("Ready: no"));
 }
 
@@ -483,9 +627,11 @@ fn convert_help_shows_expected_contract() {
 
     let stdout = stdout_text(&assert);
     assert_usage(&stdout, "convert [OPTIONS] <INPUT_PATH>");
-    assert!(stdout.contains("Input `.flac` file or directory to convert"));
+    assert!(stdout.contains("Input audio file or directory to convert"));
+    assert!(stdout.contains("--to <TO>"));
+    assert!(stdout.contains("Target format: flac, aiff, or wav"));
     assert!(stdout.contains("-o, --output-dir <OUTPUT_DIR>"));
-    assert!(stdout.contains("Write converted `.aiff` files into this directory"));
+    assert!(stdout.contains("Write converted files into this directory"));
     assert!(stdout.contains("-w, --overwrite"));
     assert!(stdout.contains("Replace existing output files instead of skipping them"));
     assert!(stdout.contains("-n, --dry-run"));
@@ -506,6 +652,8 @@ fn convert_rejects_zero_jobs() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--jobs")
         .arg("0")
         .assert()
@@ -516,20 +664,22 @@ fn convert_rejects_zero_jobs() {
 }
 
 #[test]
-fn convert_non_flac_input_file_exits_non_zero_with_clear_error() {
+fn convert_unsupported_input_file_exits_non_zero_with_clear_error() {
     let tmp = TempDir::new().expect("create temp dir");
-    let input = tmp.path().join("song.wav");
+    let input = tmp.path().join("song.mp3");
     write_file(&input);
 
     let assert = Command::cargo_bin("flacser")
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .assert()
         .failure();
 
     let stderr = stderr_text(&assert);
-    assert!(stderr.contains("input file is not a .flac file"));
+    assert!(stderr.contains("input file is not a supported audio file"));
 }
 
 #[test]
@@ -547,6 +697,8 @@ fn convert_directory_is_non_recursive_by_default() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(root)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .assert()
         .success();
@@ -572,6 +724,8 @@ fn convert_directory_recurses_when_recursive_is_enabled() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(root)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .arg("--recursive")
         .assert()
@@ -600,6 +754,8 @@ fn convert_directory_recurses_when_recursive_short_flag_is_enabled() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(root)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .arg("-r")
         .assert()
@@ -623,6 +779,8 @@ fn convert_accepts_jobs_short_flag() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .arg("-j")
         .arg("1")
@@ -647,6 +805,8 @@ fn convert_directory_supports_case_insensitive_flac_extension() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(root)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .assert()
         .success();
@@ -665,6 +825,8 @@ fn convert_empty_directory_succeeds_with_zero_summary() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(tmp.path())
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .assert()
         .success();
@@ -688,6 +850,8 @@ fn convert_skips_existing_output() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .assert()
         .success();
@@ -724,6 +888,8 @@ fn convert_overwrite_converts_existing_output() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--overwrite")
         .env("PATH", path)
         .assert()
@@ -749,6 +915,8 @@ fn convert_invalid_output_dir_path_exits_non_zero() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&output_as_file)
         .assert()
@@ -781,6 +949,8 @@ fn convert_single_file_writes_to_output_dir_with_mocked_ffmpeg() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&out_dir)
         .env("PATH", path)
@@ -819,6 +989,8 @@ fn convert_handles_paths_with_spaces() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&output_dir)
         .env("PATH", path)
@@ -846,6 +1018,8 @@ fn convert_returns_non_zero_when_ffmpeg_fails() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .env("PATH", new_path)
         .assert()
         .failure();
@@ -872,6 +1046,8 @@ fn convert_interrupt_exits_130_and_removes_partial_temp_output() {
     let mut child = StdCommand::new(assert_cmd::cargo::cargo_bin("flacser"))
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .env("PATH", path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -950,6 +1126,8 @@ fn convert_continues_after_failure_and_reports_partial_batch_failure() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input_dir)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&output_dir)
         .arg("--jobs")

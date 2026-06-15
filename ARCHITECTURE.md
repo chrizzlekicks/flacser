@@ -2,7 +2,7 @@
 
 ## Overview
 
-flacser is a Rust CLI tool for converting `.flac` audio files to `.aiff` using `ffmpeg`.
+flacser is a Rust CLI tool for converting lossless FLAC, AIFF, and WAV audio files using `ffmpeg`.
 
 It is designed as a batch-capable conversion engine with deterministic behavior, safe filesystem handling, and bounded parallel execution.
 
@@ -57,8 +57,7 @@ enum AudioFormat {
     Wav,
 }
 
-The current conversion flow still only plans FLAC input to AIFF output.
-`Wav` exists for future support and is not discoverable for conversion yet.
+The conversion flow supports FLAC, AIFF, and WAV sources and targets, except same-format conversion.
 
 ---
 
@@ -105,9 +104,9 @@ Aggregated results:
 Input: file or directory
 
 - file → single entry
-- directory → scan for `.flac` files
+- directory → scan for supported audio files
 - optional recursion
-- format detection is case-insensitive, but only FLAC is accepted for conversion
+- format detection is case-insensitive
 
 Output: Vec<PathBuf>
 
@@ -224,7 +223,6 @@ Future additions:
 
 - flatten mode
 - fail-fast mode
-- support conversion to `.wav`
 - GUI (e.g. Tauri)
 
 ---
