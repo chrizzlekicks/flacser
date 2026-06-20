@@ -47,19 +47,19 @@ flacser <COMMAND> [OPTIONS]
 
 ### Commands
 
-- `convert [OPTIONS] <INPUT_PATH> --to <FORMAT>`: convert FLAC, AIFF, or WAV files
+- `convert [OPTIONS] <INPUT_PATH>`: convert between FLAC, AIFF, and WAV
 - `doctor [OPTIONS] [INPUT_PATH]`: check whether the system is ready to run conversions
 
 `<INPUT_PATH>` for `convert` can be:
 
-- a single `.flac`, `.aiff`, or `.wav` file
+- a single `.flac`, `.aiff`, `.aif`, or `.wav` file
 - a directory (batch mode)
 
 ### Options
 
 `convert`:
 
-- `--to <FORMAT>`: target format (`flac`, `aiff`, or `wav`); falls back to `FLACSER_CONVERT_TO`
+- `--to <FORMAT>`: target format (`flac`, `aiff`, or `wav`); required unless `FLACSER_CONVERT_TO` is set
 - `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: write outputs into a specific directory
 - `--overwrite, -w`: replace existing outputs
 - `--dry-run, -n`: plan/execute flow without running `ffmpeg`
@@ -75,17 +75,18 @@ flacser <COMMAND> [OPTIONS]
 
 ### File mode
 
-- Converts one supported `.flac`, `.aiff`, or `.wav` input file to the requested target format
+- Converts one supported `.flac`, `.aiff`, `.aif`, or `.wav` input file to the requested target format
 - Source format is inferred from the file extension case-insensitively
+- `.aif` is accepted as AIFF input, but `--to aif` is not supported
 - Default output path is next to the input file
 - If `--output-dir` is set, output is written there
-- Same-format conversion is rejected
+- Supports all cross-format FLAC/AIFF/WAV conversions; same-format conversion is rejected
 
 ### Directory mode
 
 - Non-recursive by default (top-level only)
 - Recurses into subdirectories when `--recursive` is set
-- Finds `.flac`, `.aiff`, and `.wav` files case-insensitively
+- Finds `.flac`, `.aiff`, `.aif`, and `.wav` files case-insensitively
 - Preserves relative structure from the input root
 - Uses the target format's canonical extension; AIFF outputs use `.aiff`
 - Skips outputs that already exist
@@ -144,6 +145,13 @@ System readiness check:
 ```bash
 flacser doctor ./music --output-dir ./out --jobs 2
 ```
+
+## Encoding and metadata
+
+- Fixed output codecs are used: FLAC=`flac`, AIFF=`pcm_s16be`, WAV=`pcm_s16le`
+- WAV output keeps the first audio stream and drops cover art / non-audio / extra streams
+- WAV and AIFF output are currently 16-bit PCM
+- Metadata is best-effort and depends on ffmpeg/container support
 
 ## Testing
 

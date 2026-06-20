@@ -142,19 +142,30 @@ pub fn run_ffmpeg(job: &ConversionJob, output: &Path) -> Result<()> {
 
 fn ffmpeg_command(candidate: &str, job: &ConversionJob, output: &Path) -> Command {
     let mut command = Command::new(candidate);
-    command
-        .arg("-nostdin")
-        .arg("-i")
-        .arg(&job.input)
-        .arg("-map")
-        .arg("0");
+    command.arg("-nostdin").arg("-i").arg(&job.input);
 
-    if job.target_format == crate::audio_format::AudioFormat::Aiff {
-        command.arg("-write_id3v2").arg("1");
-    }
-
-    if job.target_format == AudioFormat::Flac {
-        command.arg("-c:a").arg("flac");
+    match job.target_format {
+        AudioFormat::Aiff => {
+            command
+                .arg("-map")
+                .arg("0")
+                .arg("-c:a")
+                .arg("pcm_s16be")
+                .arg("-write_id3v2")
+                .arg("1");
+        }
+        AudioFormat::Flac => {
+            command.arg("-map").arg("0").arg("-c:a").arg("flac");
+        }
+        AudioFormat::Wav => {
+            command
+                .arg("-map")
+                .arg("0:a:0")
+                .arg("-map_metadata")
+                .arg("0")
+                .arg("-c:a")
+                .arg("pcm_s16le");
+        }
     }
 
     command.arg("-y").arg("-loglevel").arg("error").arg(output);
@@ -192,27 +203,32 @@ mod tests {
         let command = ffmpeg_command("ffmpeg", &job(AudioFormat::Flac), Path::new("out.flac"));
         let args = command_args(&command);
 
+        assert!(args.windows(2).any(|args| args == ["-map", "0"]));
         assert!(args.windows(2).any(|args| args == ["-c:a", "flac"]));
         assert!(!args.windows(2).any(|args| args == ["-write_id3v2", "1"]));
         assert_eq!(args.last().map(String::as_str), Some("out.flac"));
     }
 
     #[test]
-    fn builds_aiff_args_without_forcing_pcm_codec() {
+    fn builds_aiff_args_with_pcm_s16be() {
         let command = ffmpeg_command("ffmpeg", &job(AudioFormat::Aiff), Path::new("out.aiff"));
         let args = command_args(&command);
 
-        assert!(!args.iter().any(|arg| arg == "-c:a"));
+        assert!(args.windows(2).any(|args| args == ["-map", "0"]));
+        assert!(args.windows(2).any(|args| args == ["-c:a", "pcm_s16be"]));
         assert!(args.windows(2).any(|args| args == ["-write_id3v2", "1"]));
         assert_eq!(args.last().map(String::as_str), Some("out.aiff"));
     }
 
     #[test]
-    fn builds_wav_args_without_forcing_pcm_codec() {
+    fn builds_wav_args_with_pcm_s16le_and_audio_only_mapping() {
         let command = ffmpeg_command("ffmpeg", &job(AudioFormat::Wav), Path::new("out.wav"));
         let args = command_args(&command);
 
-        assert!(!args.iter().any(|arg| arg == "-c:a"));
+        assert!(args.windows(2).any(|args| args == ["-map", "0:a:0"]));
+        assert!(args.windows(2).any(|args| args == ["-map_metadata", "0"]));
+        assert!(args.windows(2).any(|args| args == ["-c:a", "pcm_s16le"]));
+        assert!(!args.windows(2).any(|args| args == ["-map", "0"]));
         assert!(!args.windows(2).any(|args| args == ["-write_id3v2", "1"]));
         assert_eq!(args.last().map(String::as_str), Some("out.wav"));
     }

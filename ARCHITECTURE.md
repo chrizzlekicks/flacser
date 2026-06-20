@@ -57,7 +57,7 @@ enum AudioFormat {
     Wav,
 }
 
-The conversion flow supports FLAC, AIFF, and WAV sources and targets, except same-format conversion.
+The conversion flow supports all cross-format conversions among FLAC, AIFF, and WAV; same-format conversion is rejected.
 
 ---
 
@@ -119,6 +119,7 @@ Output: Vec<PathBuf>
 - preserve relative structure
 - validate output directory
 - detect collisions
+- reject same-format conversion
 
 Output: Vec<ConversionJob>
 
@@ -130,6 +131,7 @@ Output: Vec<ConversionJob>
 - each job is independent
 - report completed-job progress as work finishes
 - collect JobResult
+- `ffmpeg.rs` owns target-specific codec / muxer / mapping args
 - keep integration coverage platform-agnostic where possible via fake `ffmpeg` helpers
 - validate interrupt handling with dedicated coverage for the interrupt flag and signal handler
 
@@ -174,6 +176,13 @@ Each job must be independent:
 - separate ffmpeg process
 
 ---
+
+## Encoding and metadata
+
+- Fixed output codecs are used: FLAC=`flac`, AIFF=`pcm_s16be`, WAV=`pcm_s16le`
+- WAV output keeps the first audio stream and drops cover art / non-audio / extra streams
+- WAV and AIFF output are currently 16-bit PCM
+- Metadata is best-effort and depends on ffmpeg/container support
 
 ## Filesystem behavior
 

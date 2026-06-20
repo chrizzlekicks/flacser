@@ -155,17 +155,36 @@ fn convert_rejects_invalid_cli_target() {
     let input = tmp.path().join("song.flac");
     write_file(&input);
 
-    let assert = Command::cargo_bin("flacser")
+    for target in ["mp3", "aif"] {
+        let assert = Command::cargo_bin("flacser")
+            .expect("build flacser binary")
+            .arg("convert")
+            .arg(&input)
+            .arg("--to")
+            .arg(target)
+            .assert()
+            .failure();
+
+        let stderr = stderr_text(&assert);
+        assert!(stderr.contains("unsupported audio format"));
+    }
+}
+
+#[test]
+fn convert_accepts_aif_input() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.aif");
+    write_file(&input);
+
+    Command::cargo_bin("flacser")
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
         .arg("--to")
-        .arg("mp3")
+        .arg("wav")
+        .arg("--dry-run")
         .assert()
-        .failure();
-
-    let stderr = stderr_text(&assert);
-    assert!(stderr.contains("unsupported audio format"));
+        .success();
 }
 
 #[test]

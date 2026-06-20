@@ -166,67 +166,64 @@ mod tests {
     }
 
     #[test]
-    fn single_file_maps_to_target_extension() {
-        let dir = test_dir("target-extension");
-        let input = dir.join("track.flac");
-        fs::write(&input, b"").expect("create input");
+    fn cross_format_routes_map_to_target_extension() {
+        for (name, input_name, target, output_name, source) in [
+            (
+                "flac-to-wav",
+                "track.flac",
+                AudioFormat::Wav,
+                "track.wav",
+                AudioFormat::Flac,
+            ),
+            (
+                "wav-to-flac",
+                "track.wav",
+                AudioFormat::Flac,
+                "track.flac",
+                AudioFormat::Wav,
+            ),
+            (
+                "aiff-to-flac",
+                "track.aiff",
+                AudioFormat::Flac,
+                "track.flac",
+                AudioFormat::Aiff,
+            ),
+            (
+                "aif-to-flac",
+                "track.aif",
+                AudioFormat::Flac,
+                "track.flac",
+                AudioFormat::Aiff,
+            ),
+            (
+                "aiff-to-wav",
+                "track.aiff",
+                AudioFormat::Wav,
+                "track.wav",
+                AudioFormat::Aiff,
+            ),
+            (
+                "wav-to-aiff",
+                "track.wav",
+                AudioFormat::Aiff,
+                "track.aiff",
+                AudioFormat::Wav,
+            ),
+        ] {
+            let dir = test_dir(name);
+            let input = dir.join(input_name);
+            fs::write(&input, b"").expect("create input");
 
-        let config = test_config_to(input.clone(), None, AudioFormat::Wav);
-        let jobs = plan(&config, vec![input.clone()]).expect("plan should succeed");
+            let config = test_config_to(input.clone(), None, target);
+            let jobs = plan(&config, vec![input]).expect("plan should succeed");
 
-        assert_eq!(jobs[0].output, dir.join("track.wav"));
-        assert_eq!(jobs[0].source_format, AudioFormat::Flac);
-        assert_eq!(jobs[0].target_format, AudioFormat::Wav);
+            assert_eq!(jobs[0].output, dir.join(output_name));
+            assert_eq!(jobs[0].source_format, source);
+            assert_eq!(jobs[0].target_format, target);
 
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn wav_to_flac_maps_to_flac_output() {
-        let dir = test_dir("wav-to-flac");
-        let input = dir.join("track.wav");
-        fs::write(&input, b"").expect("create input");
-
-        let config = test_config_to(input.clone(), None, AudioFormat::Flac);
-        let jobs = plan(&config, vec![input.clone()]).expect("plan should succeed");
-
-        assert_eq!(jobs[0].output, dir.join("track.flac"));
-        assert_eq!(jobs[0].source_format, AudioFormat::Wav);
-        assert_eq!(jobs[0].target_format, AudioFormat::Flac);
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn aiff_to_flac_maps_to_flac_output() {
-        let dir = test_dir("aiff-to-flac");
-        let input = dir.join("track.aiff");
-        fs::write(&input, b"").expect("create input");
-
-        let config = test_config_to(input.clone(), None, AudioFormat::Flac);
-        let jobs = plan(&config, vec![input.clone()]).expect("plan should succeed");
-
-        assert_eq!(jobs[0].output, dir.join("track.flac"));
-        assert_eq!(jobs[0].source_format, AudioFormat::Aiff);
-        assert_eq!(jobs[0].target_format, AudioFormat::Flac);
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn aif_input_maps_to_target_extension() {
-        let dir = test_dir("aif-input");
-        let input = dir.join("track.aif");
-        fs::write(&input, b"").expect("create input");
-
-        let config = test_config_to(input.clone(), None, AudioFormat::Wav);
-        let jobs = plan(&config, vec![input.clone()]).expect("plan should succeed");
-
-        assert_eq!(jobs[0].output, dir.join("track.wav"));
-        assert_eq!(jobs[0].source_format, AudioFormat::Aiff);
-        assert_eq!(jobs[0].target_format, AudioFormat::Wav);
-
-        let _ = fs::remove_dir_all(dir);
+            let _ = fs::remove_dir_all(dir);
+        }
     }
 
     #[test]
