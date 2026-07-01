@@ -47,7 +47,10 @@ pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>>
         })
         .collect::<Result<Vec<_>>>()?;
 
-    detect_output_collisions(jobs.iter().map(|job| (job.input.as_path(), job.output.as_path())))?;
+    detect_output_collisions(
+        jobs.iter()
+            .map(|job| (job.input.as_path(), job.output.as_path())),
+    )?;
     Ok(jobs)
 }
 

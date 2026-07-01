@@ -1,4 +1,8 @@
-use std::{fs, num::NonZeroUsize, path::{Path, PathBuf}};
+use std::{
+    fs,
+    num::NonZeroUsize,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 
@@ -6,8 +10,7 @@ use crate::{
     audio_format::AudioFormat,
     cli::DoctorArgs,
     config::{self, Config},
-    discover, ffmpeg,
-    plan,
+    discover, ffmpeg, plan,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

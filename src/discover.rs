@@ -7,7 +7,11 @@ use crate::audio_format::AudioFormat;
 use crate::config::Config;
 
 pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
-    discover_with_excluded_target(config.input_path.as_path(), config.recursive, Some(config.target_format))
+    discover_with_excluded_target(
+        config.input_path.as_path(),
+        config.recursive,
+        Some(config.target_format),
+    )
 }
 
 pub fn discover_for_doctor(input_path: &std::path::Path, recursive: bool) -> Result<Vec<PathBuf>> {
