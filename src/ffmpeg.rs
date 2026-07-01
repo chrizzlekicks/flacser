@@ -4,9 +4,6 @@ use std::{
     process::{Command, Stdio},
 };
 
-#[cfg(test)]
-use std::ffi::OsString;
-
 use anyhow::{Context, Result, bail};
 
 use crate::plan::ConversionJob;
@@ -174,6 +171,8 @@ fn ffmpeg_command(candidate: &str, job: &ConversionJob, output: &Path) -> Comman
 
 #[cfg(test)]
 fn command_args(command: &Command) -> Vec<String> {
+    use std::ffi::OsString;
+
     command
         .get_args()
         .map(OsString::from)

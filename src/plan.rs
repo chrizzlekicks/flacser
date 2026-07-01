@@ -22,7 +22,6 @@ pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>>
     let target_format = config.target_format;
     validate_output_dir(output_dir)?;
 
-    let input_is_directory = original_input.is_dir();
     let jobs = inputs
         .into_iter()
         .map(|input| {
@@ -36,30 +35,8 @@ pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>>
                 );
             }
 
-            let output = if input_is_directory {
-                let relative = input.strip_prefix(original_input).with_context(|| {
-                    format!(
-                        "could not derive relative path from {} against {}",
-                        input.display(),
-                        original_input.display()
-                    )
-                })?;
-
-                let root = output_dir.unwrap_or(original_input);
-                let mut output = root.join(relative);
-                output.set_extension(target_format.canonical_extension());
-                output
-            } else {
-                let file_name = input
-                    .file_name()
-                    .with_context(|| format!("input file has no file name: {}", input.display()))?;
-
-                let mut output_file_name = PathBuf::from(file_name);
-                output_file_name.set_extension(target_format.canonical_extension());
-
-                let root = output_dir.unwrap_or_else(|| input.parent().unwrap_or(Path::new(".")));
-                root.join(output_file_name)
-            };
+            let output =
+                planned_output_path(original_input, &input, output_dir, target_format)?;
 
             Ok(ConversionJob {
                 input,
@@ -70,11 +47,11 @@ pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>>
         })
         .collect::<Result<Vec<_>>>()?;
 
-    detect_output_collisions(&jobs)?;
+    detect_output_collisions(jobs.iter().map(|job| (job.input.as_path(), job.output.as_path())))?;
     Ok(jobs)
 }
 
-fn validate_output_dir(output_dir: Option<&Path>) -> Result<()> {
+pub(crate) fn validate_output_dir(output_dir: Option<&Path>) -> Result<()> {
     match output_dir {
         None => Ok(()),
         Some(dir) => {
@@ -90,16 +67,52 @@ fn validate_output_dir(output_dir: Option<&Path>) -> Result<()> {
     }
 }
 
-fn detect_output_collisions(jobs: &[ConversionJob]) -> Result<()> {
+pub(crate) fn planned_output_path(
+    original_input: &Path,
+    input: &Path,
+    output_dir: Option<&Path>,
+    target_format: AudioFormat,
+) -> Result<PathBuf> {
+    let input_is_directory = original_input.is_dir();
+
+    if input_is_directory {
+        let relative = input.strip_prefix(original_input).with_context(|| {
+            format!(
+                "could not derive relative path from {} against {}",
+                input.display(),
+                original_input.display()
+            )
+        })?;
+
+        let root = output_dir.unwrap_or(original_input);
+        let mut output = root.join(relative);
+        output.set_extension(target_format.canonical_extension());
+        Ok(output)
+    } else {
+        let file_name = input
+            .file_name()
+            .with_context(|| format!("input file has no file name: {}", input.display()))?;
+
+        let mut output_file_name = PathBuf::from(file_name);
+        output_file_name.set_extension(target_format.canonical_extension());
+
+        let root = output_dir.unwrap_or_else(|| input.parent().unwrap_or(Path::new(".")));
+        Ok(root.join(output_file_name))
+    }
+}
+
+pub(crate) fn detect_output_collisions<'a>(
+    jobs: impl IntoIterator<Item = (&'a Path, &'a Path)>,
+) -> Result<()> {
     let mut seen: HashMap<&Path, &Path> = HashMap::new();
 
-    for job in jobs {
-        if let Some(existing_input) = seen.insert(job.output.as_path(), job.input.as_path()) {
+    for (input, output) in jobs {
+        if let Some(existing_input) = seen.insert(output, input) {
             bail!(
                 "output collision detected: {} and {} both map to {}",
                 existing_input.display(),
-                job.input.display(),
-                job.output.display()
+                input.display(),
+                output.display()
             );
         }
     }

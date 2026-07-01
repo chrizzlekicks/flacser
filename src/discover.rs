@@ -7,8 +7,18 @@ use crate::audio_format::AudioFormat;
 use crate::config::Config;
 
 pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
-    let input_path = config.input_path.as_path();
+    discover_with_excluded_target(config.input_path.as_path(), config.recursive, Some(config.target_format))
+}
 
+pub fn discover_for_doctor(input_path: &std::path::Path, recursive: bool) -> Result<Vec<PathBuf>> {
+    discover_with_excluded_target(input_path, recursive, None)
+}
+
+fn discover_with_excluded_target(
+    input_path: &std::path::Path,
+    recursive: bool,
+    excluded_target: Option<AudioFormat>,
+) -> Result<Vec<PathBuf>> {
     if input_path.is_file() {
         if AudioFormat::from_path(input_path).is_none() {
             bail!(
@@ -26,7 +36,7 @@ pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
         );
     }
 
-    let max_depth = if config.recursive { usize::MAX } else { 1 };
+    let max_depth = if recursive { usize::MAX } else { 1 };
     let mut files = Vec::new();
 
     for entry in WalkDir::new(input_path).max_depth(max_depth) {
@@ -36,7 +46,7 @@ pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
         if !path.is_file() {
             continue;
         }
-        if AudioFormat::from_path(path).is_some() {
+        if AudioFormat::from_path(path).is_some_and(|format| Some(format) != excluded_target) {
             files.push(path.to_path_buf());
         }
     }
@@ -55,7 +65,7 @@ mod tests {
 
     use crate::config::Config;
 
-    use super::discover;
+    use super::{discover, discover_for_doctor};
 
     fn test_dir(label: &str) -> PathBuf {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -159,8 +169,7 @@ mod tests {
         fs::write(&wav, b"").expect("create wav");
         fs::write(&txt, b"").expect("create txt");
 
-        let config = test_config(dir.clone());
-        let files = discover(&config).expect("discover should succeed");
+        let files = discover_for_doctor(&dir, false).expect("discover should succeed");
         assert_eq!(files, vec![aif, aiff, flac, wav]);
 
         let _ = fs::remove_dir_all(dir);
@@ -180,6 +189,22 @@ mod tests {
         let config = recursive_test_config(dir.clone());
         let files = discover(&config).expect("discover should succeed");
         assert_eq!(files, vec![a, nested]);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn excludes_target_format_files_when_discovering_directory_inputs() {
+        let dir = test_dir("exclude-target-format");
+        let flac = dir.join("song.flac");
+        let aiff = dir.join("song.aiff");
+
+        fs::write(&flac, b"").expect("create flac");
+        fs::write(&aiff, b"").expect("create aiff");
+
+        let config = test_config(dir.clone());
+        let files = discover(&config).expect("discover should succeed");
+        assert_eq!(files, vec![flac]);
 
         let _ = fs::remove_dir_all(dir);
     }

@@ -271,6 +271,30 @@ fn convert_cli_target_takes_precedence_over_env_target() {
 }
 
 #[test]
+fn convert_directory_skips_existing_target_format_inputs_during_discovery() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input_dir = tmp.path().join("input");
+    fs::create_dir_all(&input_dir).expect("create input dir");
+    write_file(&input_dir.join("song.flac"));
+    write_file(&input_dir.join("song.aiff"));
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input_dir)
+        .arg("--to")
+        .arg("aiff")
+        .arg("--dry-run")
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("total=1"));
+    assert!(stdout.contains("failed=0"));
+    assert!(!stdout.contains("same-format conversion is not supported"));
+}
+
+#[test]
 fn convert_rejects_same_format_conversion() {
     let tmp = TempDir::new().expect("create temp dir");
     let input = tmp.path().join("song.wav");
