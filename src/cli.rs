@@ -1,6 +1,6 @@
 use std::{num::NonZeroUsize, path::PathBuf};
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 use crate::audio_format::AudioFormat;
 
@@ -24,13 +24,13 @@ pub enum Commands {
     Doctor(DoctorArgs),
 }
 
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Args)]
 pub struct ConvertArgs {
     /// Input audio file or directory to convert. Source format is inferred from extension.
     pub input_path: PathBuf,
 
     /// Target format: flac, aiff, or wav. Falls back to FLACSER_CONVERT_TO.
-    #[arg(long, value_parser = clap::value_parser!(AudioFormat))]
+    #[arg(long, value_enum, env = "FLACSER_CONVERT_TO")]
     pub to: Option<AudioFormat>,
 
     /// Write converted files into this directory.

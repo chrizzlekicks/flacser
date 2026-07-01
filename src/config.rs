@@ -1,6 +1,6 @@
-use std::{env, num::NonZeroUsize, path::PathBuf, thread};
+use std::{num::NonZeroUsize, path::PathBuf, thread};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, anyhow};
 
 use crate::audio_format::AudioFormat;
 use crate::cli::ConvertArgs;
@@ -20,8 +20,6 @@ pub struct Config {
 
 impl Config {
     pub fn from_convert_args(convert: ConvertArgs) -> Result<Self> {
-        let target_format = resolve_target_format(convert.to)?;
-
         Ok(Self {
             input_path: convert.input_path,
             output_dir: convert.output_dir,
@@ -32,24 +30,10 @@ impl Config {
                 .jobs
                 .map(NonZeroUsize::get)
                 .unwrap_or_else(default_jobs),
-            target_format,
+            target_format: convert.to.ok_or_else(|| {
+                anyhow!("target format is required; pass --to <format> or set {CONVERT_TO_ENV}")
+            })?,
         })
-    }
-}
-
-fn resolve_target_format(cli_target: Option<AudioFormat>) -> Result<AudioFormat> {
-    if let Some(target) = cli_target {
-        return Ok(target);
-    }
-
-    match env::var(CONVERT_TO_ENV) {
-        Ok(value) => value
-            .parse()
-            .with_context(|| format!("invalid {CONVERT_TO_ENV} value")),
-        Err(env::VarError::NotPresent) => {
-            bail!("target format is required; pass --to <format> or set {CONVERT_TO_ENV}")
-        }
-        Err(env::VarError::NotUnicode(_)) => bail!("{CONVERT_TO_ENV} is not valid Unicode"),
     }
 }
 

@@ -166,7 +166,9 @@ fn convert_rejects_invalid_cli_target() {
             .failure();
 
         let stderr = stderr_text(&assert);
-        assert!(stderr.contains("unsupported audio format"));
+        assert!(stderr.contains("invalid value"));
+        assert!(stderr.contains("--to <TO>"));
+        assert!(stderr.contains("possible values: flac, aiff, wav"));
     }
 }
 
@@ -231,8 +233,9 @@ fn convert_rejects_invalid_env_target() {
         .failure();
 
     let stderr = stderr_text(&assert);
-    assert!(stderr.contains("invalid FLACSER_CONVERT_TO value"));
-    assert!(stderr.contains("unsupported audio format"));
+    assert!(stderr.contains("invalid value"));
+    assert!(stderr.contains("--to <TO>"));
+    assert!(stderr.contains("possible values: flac, aiff, wav"));
 }
 
 #[test]

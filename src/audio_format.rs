@@ -1,8 +1,8 @@
-use std::{fmt, path::Path, str::FromStr};
+use std::{fmt, path::Path};
 
-use anyhow::{Result, bail};
+use clap::ValueEnum;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum AudioFormat {
     Flac,
     Aiff,
@@ -10,16 +10,16 @@ pub enum AudioFormat {
 }
 
 impl AudioFormat {
-    pub fn accepted_values() -> &'static str {
-        "flac, aiff, wav"
-    }
-
-    pub fn canonical_extension(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Flac => "flac",
             Self::Aiff => "aiff",
             Self::Wav => "wav",
         }
+    }
+
+    pub fn canonical_extension(self) -> &'static str {
+        self.as_str()
     }
 
     pub fn from_path(path: &Path) -> Option<Self> {
@@ -41,25 +41,6 @@ impl AudioFormat {
     }
 }
 
-impl FromStr for AudioFormat {
-    type Err = anyhow::Error;
-
-    fn from_str(value: &str) -> Result<Self> {
-        if value.eq_ignore_ascii_case("flac") {
-            Ok(Self::Flac)
-        } else if value.eq_ignore_ascii_case("aiff") {
-            Ok(Self::Aiff)
-        } else if value.eq_ignore_ascii_case("wav") {
-            Ok(Self::Wav)
-        } else {
-            bail!(
-                "unsupported audio format '{value}' (expected one of: {})",
-                Self::accepted_values()
-            )
-        }
-    }
-}
-
 impl fmt::Display for AudioFormat {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.canonical_extension())
@@ -69,6 +50,8 @@ impl fmt::Display for AudioFormat {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+
+    use clap::ValueEnum;
 
     use super::AudioFormat;
 
@@ -125,14 +108,23 @@ mod tests {
 
     #[test]
     fn parses_supported_target_values() {
-        assert_eq!("flac".parse::<AudioFormat>().unwrap(), AudioFormat::Flac);
-        assert_eq!("AIFF".parse::<AudioFormat>().unwrap(), AudioFormat::Aiff);
-        assert_eq!("Wav".parse::<AudioFormat>().unwrap(), AudioFormat::Wav);
+        assert_eq!(
+            AudioFormat::from_str("flac", true).unwrap(),
+            AudioFormat::Flac
+        );
+        assert_eq!(
+            AudioFormat::from_str("AIFF", true).unwrap(),
+            AudioFormat::Aiff
+        );
+        assert_eq!(
+            AudioFormat::from_str("Wav", true).unwrap(),
+            AudioFormat::Wav
+        );
     }
 
     #[test]
     fn rejects_aif_as_target_value() {
-        let error = "aif".parse::<AudioFormat>().expect_err("parse should fail");
-        assert!(error.to_string().contains("unsupported audio format"));
+        let error = AudioFormat::from_str("aif", true).expect_err("parse should fail");
+        assert!(error.to_string().contains("invalid variant"));
     }
 }

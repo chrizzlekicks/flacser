@@ -23,7 +23,7 @@ exclude = [
 ]
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 anyhow = "1"
 ctrlc = "3"
 rayon = "1"
