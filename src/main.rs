@@ -34,6 +34,10 @@ fn run_convert(convert: cli::ConvertArgs) -> Result<()> {
         ffmpeg::check_availability()?;
     }
 
+    if ffmpeg::probe_is_needed(&config, &jobs) {
+        ffmpeg::check_probe_availability()?;
+    }
+
     let report = convert::execute(&config, jobs, &interrupt);
     let summary = summary::Summary::from_report(&report);
 

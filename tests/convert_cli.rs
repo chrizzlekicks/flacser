@@ -12,7 +12,7 @@ use std::{
 use assert_cmd::Command;
 use tempfile::TempDir;
 
-use support::{FakeFfmpeg, install_fake_ffmpeg, prepend_path};
+use support::{FakeFfmpeg, install_fake_ffmpeg, install_fake_ffprobe, prepend_path};
 
 #[cfg(unix)]
 const INTERRUPT_FAKE_FFMPEG_START_TIMEOUT: Duration = Duration::from_secs(5);
@@ -58,6 +58,18 @@ fn install_interrupt_fake_ffmpeg(dir: &Path, marker: &Path) {
         .permissions();
     perms.set_mode(0o755);
     fs::set_permissions(&ffmpeg_path, perms).expect("chmod fake ffmpeg");
+
+    let ffprobe_path = dir.join("ffprobe");
+    fs::write(
+        &ffprobe_path,
+        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf '%s\\n' 'ffprobe version test'\n  exit 0\nfi\nprintf '%s\\n' 'sample_fmt=s16'\nprintf '%s\\n' 'bits_per_sample=16'\nprintf '%s\\n' 'bits_per_raw_sample=N/A'\nexit 0\n",
+    )
+    .expect("write fake ffprobe");
+    let mut perms = fs::metadata(&ffprobe_path)
+        .expect("stat fake ffprobe")
+        .permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&ffprobe_path, perms).expect("chmod fake ffprobe");
 }
 
 #[test]
@@ -127,6 +139,44 @@ fn convert_missing_ffmpeg_exits_non_zero_with_install_instructions() {
     assert!(stderr.contains("Arch:   sudo pacman -S ffmpeg"));
     assert!(stderr.contains("Ubuntu: sudo apt install ffmpeg"));
     assert!(stderr.contains("macOS:  brew install ffmpeg"));
+}
+
+#[test]
+fn convert_missing_ffprobe_for_pcm_target_exits_non_zero_with_install_instructions() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: false,
+        },
+    );
+    let ffprobe = if cfg!(windows) {
+        bin_dir.join("ffprobe.cmd")
+    } else {
+        bin_dir.join("ffprobe")
+    };
+    fs::remove_file(ffprobe).expect("remove fake ffprobe");
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("aiff")
+        .env("PATH", &bin_dir)
+        .assert()
+        .failure();
+
+    let stdout = stdout_text(&assert);
+    let stderr = stderr_text(&assert);
+    assert!(!stdout.contains("Summary:"));
+    assert!(stderr.contains("ffprobe not found."));
+    assert!(stderr.contains("Install it with:"));
 }
 
 #[test]
@@ -216,6 +266,38 @@ fn convert_uses_env_target_fallback() {
         .success();
 
     assert!(tmp.path().join("song.wav").exists());
+}
+
+#[test]
+fn convert_wav_uses_probe_bit_depth_for_pcm_codec() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteArgs {
+            create_parent: false,
+        },
+    );
+    install_fake_ffprobe(
+        &bin_dir,
+        "sample_fmt=s32\nbits_per_sample=32\nbits_per_raw_sample=24\n",
+    );
+
+    Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("wav")
+        .env("PATH", prepend_path(&bin_dir))
+        .assert()
+        .success();
+
+    let output = fs::read_to_string(tmp.path().join("song.wav")).expect("read fake output");
+    assert!(output.contains("-c:a pcm_s24le"));
 }
 
 #[test]
