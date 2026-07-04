@@ -7,9 +7,10 @@ It supports single-file conversion, directory batch conversion with parallel exe
 ## Requirements
 
 - `ffmpeg`
+- `ffprobe`
 - Rust toolchain (for building from source)
 
-Install `ffmpeg`:
+Install the FFmpeg suite:
 
 ```bash
 # Arch 
@@ -25,7 +26,7 @@ brew install ffmpeg
 Windows:
 
 - install FFmpeg
-- ensure `ffmpeg.exe` is available on `PATH`
+- ensure `ffmpeg.exe` and `ffprobe.exe` are available on `PATH`
 
 ## Build
 
@@ -62,7 +63,7 @@ flacser <COMMAND> [OPTIONS]
 - `--to <FORMAT>`: target format (`flac`, `aiff`, or `wav`); required unless `FLACSER_CONVERT_TO` is set
 - `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: write outputs into a specific directory
 - `--overwrite, -w`: replace existing outputs
-- `--dry-run, -n`: plan/execute flow without running `ffmpeg`
+- `--dry-run, -n`: plan/execute flow without running `ffmpeg` or `ffprobe`
 - `--recursive, -r`: recurse into subdirectories in directory mode
 - `--jobs <JOBS>, -j <JOBS>`: set the number of parallel conversion jobs
 
@@ -103,7 +104,7 @@ flacser <COMMAND> [OPTIONS]
 ### Doctor command
 
 - Prints a read-only report with `ok`, `warn`, and `fail` checks
-- Verifies `ffmpeg` availability and version
+- Verifies `ffmpeg` and `ffprobe` availability and version
 - Checks detected CPU cores and default worker settings
 - Optionally validates an input path, output directory, and configured worker limit
 - Exits non-zero when any required check fails
@@ -148,9 +149,9 @@ flacser doctor ./music --output-dir ./out --jobs 2
 
 ## Encoding and metadata
 
-- Fixed output codecs are used: FLAC=`flac`, AIFF=`pcm_s16be`, WAV=`pcm_s16le`
+- FLAC output uses the `flac` encoder
+- WAV and AIFF output select PCM codecs from the source bit depth and sample format reported by `ffprobe`
 - WAV output keeps the first audio stream and drops cover art / non-audio / extra streams
-- WAV and AIFF output are currently 16-bit PCM
 - Metadata is best-effort and depends on ffmpeg/container support
 
 ## Testing
@@ -165,7 +166,7 @@ Test suite includes:
 
 - unit tests for discover/plan/convert/summary/config logic
 - integration tests for CLI behavior and exit codes
-- cross-platform integration tests with mocked `ffmpeg` and `PATH` portability helpers
+- cross-platform integration tests with mocked `ffmpeg` / `ffprobe` and `PATH` portability helpers
 
 CI runs the Rust test suite on Ubuntu, Windows, and macOS.
 

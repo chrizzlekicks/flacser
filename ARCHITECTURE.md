@@ -16,7 +16,7 @@ The CLI is a thin layer over a reusable core.
 - Readability over cleverness
 - Batch-first design
 - Deterministic behavior
-- Thin wrapper over ffmpeg
+- Thin wrapper over ffmpeg / ffprobe
 
 ---
 
@@ -37,7 +37,7 @@ CLI → Config → Discover → Plan → Execute → Summarize → Output
 - plan.rs       → map inputs to outputs
 - convert.rs    → execute jobs (Rayon)
 - interrupt.rs  → interrupt flag handling and ctrlc handler
-- ffmpeg.rs     → process spawning
+- ffmpeg.rs     → ffmpeg / ffprobe process spawning
 - progress.rs   → track completed jobs and print progress
 - summary.rs    → aggregate results
 - doctor.rs     → readiness checks and environment diagnostics
@@ -131,8 +131,8 @@ Output: Vec<ConversionJob>
 - each job is independent
 - report completed-job progress as work finishes
 - collect JobResult
-- `ffmpeg.rs` owns target-specific codec / muxer / mapping args
-- keep integration coverage platform-agnostic where possible via fake `ffmpeg` helpers
+- `ffmpeg.rs` owns target-specific probing, codec, muxer, and mapping args
+- keep integration coverage platform-agnostic where possible via fake `ffmpeg` / `ffprobe` helpers
 - validate interrupt handling with dedicated coverage for the interrupt flag and signal handler
 
 ---
@@ -145,7 +145,7 @@ Output: Vec<ConversionJob>
 
 ### Doctor
 
-- probe `ffmpeg` availability and version
+- probe `ffmpeg` and `ffprobe` availability and version
 - check detected CPU cores and default worker calculation
 - optionally validate an input path, output directory, and configured job limit
 - return a read-only report with `ok`, `warn`, and `fail` checks
@@ -179,9 +179,9 @@ Each job must be independent:
 
 ## Encoding and metadata
 
-- Fixed output codecs are used: FLAC=`flac`, AIFF=`pcm_s16be`, WAV=`pcm_s16le`
+- FLAC output uses the `flac` encoder
+- WAV and AIFF output select PCM codecs from the source bit depth and sample format reported by `ffprobe`
 - WAV output keeps the first audio stream and drops cover art / non-audio / extra streams
-- WAV and AIFF output are currently 16-bit PCM
 - Metadata is best-effort and depends on ffmpeg/container support
 
 ## Filesystem behavior
