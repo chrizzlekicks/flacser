@@ -69,6 +69,7 @@ flacser <COMMAND> [OPTIONS]
 
 `doctor`:
 
+- `--to <FORMAT>`: target format (`flac`, `aiff`, or `wav`) to validate conversion planning; falls back to `FLACSER_CONVERT_TO`
 - `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: diagnose a specific output directory
 - `--jobs <JOBS>, -j <JOBS>`: diagnose a specific parallel worker limit
 
@@ -106,7 +107,8 @@ flacser <COMMAND> [OPTIONS]
 - Prints a read-only report with `ok`, `warn`, and `fail` checks
 - Verifies `ffmpeg` and `ffprobe` availability and version
 - Checks detected CPU cores and default worker settings
-- Optionally validates an input path, output directory, and configured worker limit
+- Optionally validates an input path, target format, output directory, and configured worker limit
+- Requires `--to` or `FLACSER_CONVERT_TO` to validate output planning for an input path
 - Exits non-zero when any required check fails
 
 ## Examples
@@ -144,7 +146,7 @@ FLACSER_CONVERT_TO=aiff flacser convert ./music
 System readiness check:
 
 ```bash
-flacser doctor ./music --output-dir ./out --jobs 2
+flacser doctor ./music --to aiff --output-dir ./out --jobs 2
 ```
 
 ## Encoding and metadata

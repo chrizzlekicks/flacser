@@ -24,7 +24,7 @@ The CLI is a thin layer over a reusable core.
 
 CLI → Config → Discover → Plan → Execute → Summarize → Output
 
-`doctor` is a separate read-only path that probes the environment and, when provided, validates input/output/job-limit inputs without running conversions.
+`doctor` is a separate read-only path that probes the environment and, when provided, validates input/target/output/job-limit inputs without running conversions.
 
 ---
 
@@ -147,7 +147,8 @@ Output: Vec<ConversionJob>
 
 - probe `ffmpeg` and `ffprobe` availability and version
 - check detected CPU cores and default worker calculation
-- optionally validate an input path, output directory, and configured job limit
+- optionally validate an input path, target format, output directory, and configured job limit
+- reuse convert discovery and planning when a target is provided
 - return a read-only report with `ok`, `warn`, and `fail` checks
 - exit non-zero when any required check fails
 

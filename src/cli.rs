@@ -59,6 +59,10 @@ pub struct DoctorArgs {
     /// Optional input path to diagnose before conversion.
     pub input_path: Option<PathBuf>,
 
+    /// Target format: flac, aiff, or wav. Falls back to FLACSER_CONVERT_TO.
+    #[arg(long, value_enum, env = "FLACSER_CONVERT_TO")]
+    pub to: Option<AudioFormat>,
+
     /// Diagnose this output directory without creating it.
     #[arg(short = 'o', long)]
     pub output_dir: Option<PathBuf>,

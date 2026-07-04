@@ -442,6 +442,7 @@ fn doctor_help_shows_expected_contract() {
     let stdout = stdout_text(&assert);
     assert_usage(&stdout, "doctor [OPTIONS] [INPUT_PATH]");
     assert!(stdout.contains("Optional input path to diagnose before conversion"));
+    assert!(stdout.contains("--to <TO>"));
     assert!(stdout.contains("-o, --output-dir <OUTPUT_DIR>"));
     assert!(stdout.contains("-j, --jobs <JOBS>"));
 }
@@ -531,6 +532,8 @@ fn doctor_file_input_with_jobs_succeeds_with_fake_ffmpeg() {
         .expect("build flacser binary")
         .arg("doctor")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--jobs")
         .arg("1")
         .env("PATH", path)
@@ -566,6 +569,8 @@ fn doctor_file_input_with_output_dir_succeeds_with_fake_ffmpeg() {
         .expect("build flacser binary")
         .arg("doctor")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&out_dir)
         .env("PATH", path)
@@ -601,6 +606,8 @@ fn doctor_directory_input_summarizes_planning_without_output_names() {
         .expect("build flacser binary")
         .arg("doctor")
         .arg(tmp.path())
+        .arg("--to")
+        .arg("aiff")
         .env("PATH", path)
         .assert()
         .success();
@@ -615,6 +622,71 @@ fn doctor_directory_input_summarizes_planning_without_output_names() {
     assert!(!stdout.contains("second.aiff"));
     assert!(stdout.contains("[ok] effective workers: 2"));
     assert!(stdout.contains("Ready: yes"));
+}
+
+#[test]
+fn doctor_directory_reports_convert_target_output_collision() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&tmp.path().join("song.flac"));
+    write_file(&tmp.path().join("song.wav"));
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg(tmp.path())
+        .arg("--to")
+        .arg("aiff")
+        .env("PATH", path)
+        .assert()
+        .failure();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[fail] output planning: output collision detected"));
+    assert!(stdout.contains("song.flac"));
+    assert!(stdout.contains("song.wav"));
+    assert!(stdout.contains("song.aiff"));
+    assert!(stdout.contains("Ready: no"));
+}
+
+#[test]
+fn doctor_input_without_target_fails_output_planning() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg(&input)
+        .env("PATH", path)
+        .assert()
+        .failure();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[ok] input type: file"));
+    assert!(stdout.contains("[fail] output planning: target format is required"));
+    assert!(stdout.contains("FLACSER_CONVERT_TO"));
+    assert!(stdout.contains("Ready: no"));
 }
 
 #[test]
@@ -724,6 +796,8 @@ fn doctor_output_path_file_exits_non_zero() {
         .expect("build flacser binary")
         .arg("doctor")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&output_as_file)
         .env("PATH", path)

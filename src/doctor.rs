@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Context;
+use anyhow::{Result, bail};
 
 use crate::{
     audio_format::AudioFormat,
@@ -184,6 +184,7 @@ fn diagnose(
 #[derive(Debug, Clone)]
 struct DoctorInput {
     input_path: Option<PathBuf>,
+    target_format: Option<AudioFormat>,
     output_dir: Option<PathBuf>,
     jobs: Option<usize>,
 }
@@ -192,6 +193,7 @@ impl DoctorInput {
     fn from_args(args: DoctorArgs) -> Self {
         Self {
             input_path: args.input_path,
+            target_format: args.to,
             output_dir: args.output_dir,
             jobs: args.jobs.map(NonZeroUsize::get),
         }
@@ -205,7 +207,7 @@ impl DoctorInput {
             dry_run: true,
             recursive: false,
             jobs: self.jobs.unwrap_or_else(config::default_jobs),
-            target_format: AudioFormat::Flac,
+            target_format: self.target_format.unwrap_or(AudioFormat::Flac),
         }
     }
 }
@@ -232,7 +234,7 @@ fn add_input_checks(report: &mut DoctorReport, input: &DoctorInput, input_path: 
     }
 
     let config = input.discovery_config(input_path.to_path_buf());
-    let inputs = match discover::discover_for_doctor(input_path, false) {
+    let inputs = match discover_inputs_for_doctor(input, &config) {
         Ok(inputs) => inputs,
         Err(error) => {
             report.push(DoctorCheck::failed("discoverable files", error.to_string()));
@@ -258,7 +260,7 @@ fn add_input_checks(report: &mut DoctorReport, input: &DoctorInput, input_path: 
     ));
 
     let job_count = inputs.len();
-    match validate_output_planning(input_path, input.output_dir.as_deref(), &inputs) {
+    match validate_output_planning(input, &config, inputs) {
         Ok(planned_outputs) => {
             report.push(DoctorCheck::ok(
                 "output planning",
@@ -273,39 +275,24 @@ fn add_input_checks(report: &mut DoctorReport, input: &DoctorInput, input_path: 
     }
 }
 
-fn validate_output_planning(
-    original_input: &Path,
-    output_dir: Option<&Path>,
-    inputs: &[PathBuf],
-) -> anyhow::Result<usize> {
-    plan::validate_output_dir(output_dir)?;
-    let planned_outputs = inputs
-        .iter()
-        .map(|input| {
-            let source_format = AudioFormat::from_path(input)
-                .with_context(|| format!("unsupported input file: {}", input.display()))?;
-            let target_format = doctor_target_format(source_format);
-            let output =
-                plan::planned_output_path(original_input, input, output_dir, target_format)?;
-            Ok((input.as_path(), output))
-        })
-        .collect::<anyhow::Result<Vec<_>>>()?;
-
-    plan::detect_output_collisions(
-        planned_outputs
-            .iter()
-            .map(|(input, output)| (*input, output.as_path())),
-    )?;
-
-    Ok(inputs.len())
+fn discover_inputs_for_doctor(input: &DoctorInput, config: &Config) -> Result<Vec<PathBuf>> {
+    match input.target_format {
+        Some(_) => discover::discover(config),
+        None => discover::discover_for_doctor(config.input_path.as_path(), false),
+    }
 }
 
-fn doctor_target_format(source_format: AudioFormat) -> AudioFormat {
-    match source_format {
-        AudioFormat::Flac => AudioFormat::Aiff,
-        AudioFormat::Aiff => AudioFormat::Flac,
-        AudioFormat::Wav => AudioFormat::Flac,
+fn validate_output_planning(
+    input: &DoctorInput,
+    config: &Config,
+    inputs: Vec<PathBuf>,
+) -> Result<usize> {
+    if input.target_format.is_none() {
+        bail!("target format is required; pass --to <format> or set FLACSER_CONVERT_TO");
     }
+
+    let jobs = plan::plan(config, inputs)?;
+    Ok(jobs.len())
 }
 
 fn check_output_dir(output_dir: &Path) -> DoctorCheck {
@@ -376,8 +363,8 @@ mod tests {
         sync::atomic::{AtomicU64, Ordering},
     };
 
-    use crate::cli::DoctorArgs;
     use crate::ffmpeg::VersionProbe;
+    use crate::{audio_format::AudioFormat, cli::DoctorArgs};
 
     use super::{CheckStatus, DoctorCheck, DoctorInput, DoctorReport, diagnose};
 
@@ -397,8 +384,31 @@ mod tests {
         output_dir: Option<PathBuf>,
         jobs: Option<usize>,
     ) -> DoctorInput {
+        args_to(input_path, Some(AudioFormat::Aiff), output_dir, jobs)
+    }
+
+    fn args_to(
+        input_path: Option<PathBuf>,
+        target_format: Option<AudioFormat>,
+        output_dir: Option<PathBuf>,
+        jobs: Option<usize>,
+    ) -> DoctorInput {
         DoctorInput::from_args(DoctorArgs {
             input_path,
+            to: target_format,
+            output_dir,
+            jobs: jobs.and_then(NonZeroUsize::new),
+        })
+    }
+
+    fn args_without_target(
+        input_path: Option<PathBuf>,
+        output_dir: Option<PathBuf>,
+        jobs: Option<usize>,
+    ) -> DoctorInput {
+        DoctorInput::from_args(DoctorArgs {
+            input_path,
+            to: None,
             output_dir,
             jobs: jobs.and_then(NonZeroUsize::new),
         })
@@ -506,7 +516,7 @@ mod tests {
     #[test]
     fn reports_not_ready_when_ffprobe_is_missing() {
         let report = diagnose(
-            args(None, None, None),
+            args_without_target(None, None, None),
             passing_probe,
             || VersionProbe {
                 executable_found: false,
@@ -601,7 +611,7 @@ mod tests {
         fs::write(&input, b"").expect("create input");
 
         let report = diagnose(
-            args(Some(input), None, Some(2)),
+            args_to(Some(input), Some(AudioFormat::Flac), None, Some(2)),
             passing_probe,
             passing_ffprobe_probe,
             || 8,
@@ -610,6 +620,34 @@ mod tests {
         assert_eq!(check(&report, "discoverable files").status, CheckStatus::Ok);
         assert_eq!(check(&report, "output planning").status, CheckStatus::Ok);
         assert!(report.is_ready());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn input_without_target_fails_output_planning() {
+        let dir = test_dir("targetless-file-input");
+        let input = dir.join("song.flac");
+        fs::write(&input, b"").expect("create input");
+
+        let report = diagnose(
+            args_without_target(Some(input), None, Some(2)),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
+
+        assert_eq!(check(&report, "discoverable files").status, CheckStatus::Ok);
+        assert_eq!(
+            check(&report, "output planning").status,
+            CheckStatus::Failed
+        );
+        assert!(
+            check(&report, "output planning")
+                .detail
+                .contains("target format is required")
+        );
+        assert!(!report.is_ready());
 
         let _ = fs::remove_dir_all(dir);
     }
@@ -657,10 +695,37 @@ mod tests {
         assert!(
             check(&report, "discoverable files")
                 .detail
-                .starts_with("2 supported audio")
+                .starts_with("1 supported audio")
         );
         assert_eq!(check(&report, "output planning").status, CheckStatus::Ok);
         assert!(report.is_ready());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn mixed_directory_detects_convert_output_collision_for_target() {
+        let dir = test_dir("dir-output-collision");
+        fs::write(dir.join("song.flac"), b"").expect("create flac input");
+        fs::write(dir.join("song.wav"), b"").expect("create wav input");
+
+        let report = diagnose(
+            args(Some(dir.clone()), None, Some(4)),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
+
+        assert_eq!(
+            check(&report, "output planning").status,
+            CheckStatus::Failed
+        );
+        assert!(
+            check(&report, "output planning")
+                .detail
+                .contains("output collision detected")
+        );
+        assert!(!report.is_ready());
 
         let _ = fs::remove_dir_all(dir);
     }
