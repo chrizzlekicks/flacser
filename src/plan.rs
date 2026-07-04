@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     collections::HashMap,
     path::{Path, PathBuf},
 };
@@ -79,47 +78,67 @@ fn validate_output_dir(output_dir: Option<&Path>) -> Result<()> {
 }
 
 fn detect_output_collisions(jobs: &[ConversionJob], flatten: bool) -> Result<()> {
-    let mut seen: HashMap<Cow<'_, str>, &Path> = HashMap::new();
+    if flatten {
+        let mut seen: HashMap<Vec<u8>, &Path> = HashMap::new();
 
-    for job in jobs {
-        let collision_key = collision_key(job.output.as_path(), flatten)?;
-        #[expect(clippy::single_match, reason = "match pattern keeps bailing clear")]
-        match seen.get(collision_key.as_ref()) {
-            Some(existing_input) => {
-                bail!(
-                    "output collision detected: {} and {} both map to {}",
-                    existing_input.display(),
-                    job.input.display(),
-                    job.output.display()
-                );
+        for job in jobs {
+            let mut collision_key = output_file_name_bytes(job.output.as_path())?;
+            collision_key.make_ascii_lowercase();
+            #[expect(clippy::single_match, reason = "match pattern keeps bailing clear")]
+            match seen.get(&collision_key) {
+                Some(existing_input) => {
+                    bail!(
+                        "output collision detected: {} and {} both map to {}",
+                        existing_input.display(),
+                        job.input.display(),
+                        job.output.display()
+                    );
+                }
+                None => {}
             }
-            None => {}
+            seen.insert(collision_key, job.input.as_path());
         }
-        seen.insert(collision_key, job.input.as_path());
+    } else {
+        let mut seen: HashMap<&Path, &Path> = HashMap::new();
+
+        for job in jobs {
+            #[expect(clippy::single_match, reason = "match pattern keeps bailing clear")]
+            match seen.get(job.output.as_path()) {
+                Some(existing_input) => {
+                    bail!(
+                        "output collision detected: {} and {} both map to {}",
+                        existing_input.display(),
+                        job.input.display(),
+                        job.output.display()
+                    );
+                }
+                None => {}
+            }
+            seen.insert(job.output.as_path(), job.input.as_path());
+        }
     }
 
     Ok(())
 }
 
-fn collision_key<'a>(output: &'a Path, flatten: bool) -> Result<Cow<'a, str>> {
-    if flatten {
-        let file_name = output
-            .file_name()
-            .with_context(|| format!("output path has no file name: {}", output.display()))?;
-        let file_name = file_name.to_string_lossy();
-        Ok(Cow::Owned(file_name.to_lowercase()))
-    } else {
-        Ok(output.to_string_lossy())
-    }
+fn output_file_name_bytes(output: &Path) -> Result<Vec<u8>> {
+    let file_name = output
+        .file_name()
+        .with_context(|| format!("output path has no file name: {}", output.display()))?;
+    Ok(file_name.as_encoded_bytes().to_vec())
 }
 
 #[cfg(test)]
 mod tests {
     use std::{
+        ffi::OsString,
         fs,
         path::PathBuf,
         sync::atomic::{AtomicU64, Ordering},
     };
+
+    #[cfg(target_os = "linux")]
+    use std::os::unix::ffi::OsStringExt;
 
     use crate::config::Config;
 
@@ -340,6 +359,52 @@ mod tests {
         let jobs = plan(&config, vec![input.clone()]).expect("plan should succeed");
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].output, output_dir.join("track.aiff"));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn non_flatten_allows_distinct_non_utf8_paths() {
+        let dir = test_dir("non-flatten-non-utf8");
+        let input_root = dir.join("input");
+        fs::create_dir_all(&input_root).expect("create input root");
+
+        let input_a = input_root.join(OsString::from_vec(b"a\xff.flac".to_vec()));
+        let input_b = input_root.join(OsString::from_vec(b"a\xfe.flac".to_vec()));
+        fs::write(&input_a, b"").expect("create input a");
+        fs::write(&input_b, b"").expect("create input b");
+
+        let config = test_config(input_root.clone(), None);
+        let jobs =
+            plan(&config, vec![input_a.clone(), input_b.clone()]).expect("plan should succeed");
+        assert_eq!(jobs.len(), 2);
+        assert_ne!(jobs[0].output, jobs[1].output);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn flatten_allows_distinct_non_utf8_paths() {
+        let dir = test_dir("flatten-non-utf8");
+        let input_root = dir.join("input");
+        let album_a = input_root.join("album-a");
+        let album_b = input_root.join("album-b");
+        fs::create_dir_all(&album_a).expect("create album-a");
+        fs::create_dir_all(&album_b).expect("create album-b");
+
+        let input_a = album_a.join(OsString::from_vec(b"a\xff.flac".to_vec()));
+        let input_b = album_b.join(OsString::from_vec(b"a\xfe.flac".to_vec()));
+        fs::write(&input_a, b"").expect("create input a");
+        fs::write(&input_b, b"").expect("create input b");
+
+        let mut config = test_config(input_root.clone(), None);
+        config.flatten = true;
+        let jobs =
+            plan(&config, vec![input_a.clone(), input_b.clone()]).expect("plan should succeed");
+        assert_eq!(jobs.len(), 2);
+        assert_ne!(jobs[0].output, jobs[1].output);
 
         let _ = fs::remove_dir_all(dir);
     }
