@@ -208,6 +208,7 @@ mod tests {
             overwrite,
             dry_run,
             recursive: false,
+            flatten: false,
             jobs: 1,
         }
     }

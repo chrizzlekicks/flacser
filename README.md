@@ -63,6 +63,7 @@ flacser <COMMAND> [OPTIONS]
 - `--overwrite, -w`: replace existing outputs
 - `--dry-run, -n`: plan/execute flow without running `ffmpeg`
 - `--recursive, -r`: recurse into subdirectories in directory mode
+- `--flatten`: write all converted files directly into the output directory
 - `--jobs <JOBS>, -j <JOBS>`: set the number of parallel conversion jobs
 
 `doctor`:
@@ -84,6 +85,7 @@ flacser <COMMAND> [OPTIONS]
 - Recurses into subdirectories when `--recursive` is set
 - Finds `.flac` files case-insensitively
 - Preserves relative structure from the input root
+- With `--flatten`, writes all outputs directly into the output root and fails on basename collisions
 - Skips outputs that already exist
 
 ### Execution and exits
@@ -127,6 +129,12 @@ Directory conversion with two parallel jobs:
 
 ```bash
 flacser convert ./music --jobs 2
+```
+
+Flatten recursive directory output:
+
+```bash
+flacser convert ./music --recursive --flatten --output-dir ./out
 ```
 
 System readiness check:

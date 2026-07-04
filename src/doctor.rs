@@ -184,6 +184,7 @@ impl DoctorInput {
             overwrite: false,
             dry_run: true,
             recursive: false,
+            flatten: false,
             jobs: self.jobs.unwrap_or_else(config::default_jobs),
         }
     }

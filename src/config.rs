@@ -9,6 +9,7 @@ pub struct Config {
     pub overwrite: bool,
     pub dry_run: bool,
     pub recursive: bool,
+    pub flatten: bool,
     pub jobs: usize,
 }
 
@@ -20,6 +21,7 @@ impl Config {
             overwrite: convert.overwrite,
             dry_run: convert.dry_run,
             recursive: convert.recursive,
+            flatten: convert.flatten,
             jobs: convert
                 .jobs
                 .map(NonZeroUsize::get)
@@ -59,6 +61,7 @@ mod tests {
             overwrite: true,
             dry_run: true,
             recursive: true,
+            flatten: true,
             jobs: NonZeroUsize::new(2),
         };
 
@@ -69,6 +72,7 @@ mod tests {
         assert!(config.overwrite);
         assert!(config.dry_run);
         assert!(config.recursive);
+        assert!(config.flatten);
         assert_eq!(config.jobs, 2);
     }
 
@@ -80,6 +84,7 @@ mod tests {
             overwrite: false,
             dry_run: false,
             recursive: false,
+            flatten: false,
             jobs: None,
         };
 

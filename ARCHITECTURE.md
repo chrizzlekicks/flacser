@@ -161,13 +161,21 @@ Each job must be independent:
 Directory mode:
 
 - preserve relative structure
+- with flatten mode, write outputs directly under the output root and fail on basename collisions
 
 Example:
 
-input/album/song.flac  
-→ output/album/song.aiff
+```text
+input/album/song.flac
+-> output/album/song.aiff
+```
 
-No flattening in v1.
+Flatten example:
+
+```text
+input/album/song.flac
+-> output/song.aiff
+```
 
 ---
 
@@ -202,7 +210,6 @@ Must not contain core logic.
 
 Future additions:
 
-- flatten mode
 - fail-fast mode
 - support conversion to `.wav`
 - GUI (e.g. Tauri)

@@ -77,6 +77,7 @@ mod tests {
             overwrite: false,
             dry_run: false,
             recursive: false,
+            flatten: false,
             jobs: 1,
         }
     }
@@ -88,6 +89,7 @@ mod tests {
             overwrite: false,
             dry_run: false,
             recursive: true,
+            flatten: false,
             jobs: 1,
         }
     }

@@ -46,6 +46,10 @@ pub struct ConvertArgs {
     /// Limit the number of parallel conversion jobs.
     #[arg(short = 'j', long)]
     pub jobs: Option<NonZeroUsize>,
+
+    /// Write all converted files directly into the output directory, ignoring input subdirectories.
+    #[arg(long, default_value_t = false)]
+    pub flatten: bool,
 }
 
 #[derive(Debug, clap::Args)]
