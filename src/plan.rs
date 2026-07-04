@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::HashMap,
     path::{Path, PathBuf},
 };
@@ -57,7 +58,7 @@ pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>>
         })
         .collect::<Result<Vec<_>>>()?;
 
-    detect_output_collisions(&jobs)?;
+    detect_output_collisions(&jobs, config.flatten)?;
     Ok(jobs)
 }
 
@@ -77,12 +78,13 @@ fn validate_output_dir(output_dir: Option<&Path>) -> Result<()> {
     }
 }
 
-fn detect_output_collisions(jobs: &Vec<ConversionJob>) -> Result<()> {
-    let mut seen: HashMap<&Path, &Path> = HashMap::new();
+fn detect_output_collisions(jobs: &[ConversionJob], flatten: bool) -> Result<()> {
+    let mut seen: HashMap<Cow<'_, str>, &Path> = HashMap::new();
 
     for job in jobs {
+        let collision_key = collision_key(job.output.as_path(), flatten)?;
         #[expect(clippy::single_match, reason = "match pattern keeps bailing clear")]
-        match seen.get(job.output.as_path()) {
+        match seen.get(collision_key.as_ref()) {
             Some(existing_input) => {
                 bail!(
                     "output collision detected: {} and {} both map to {}",
@@ -93,10 +95,22 @@ fn detect_output_collisions(jobs: &Vec<ConversionJob>) -> Result<()> {
             }
             None => {}
         }
-        seen.insert(job.output.as_path(), job.input.as_path());
+        seen.insert(collision_key, job.input.as_path());
     }
 
     Ok(())
+}
+
+fn collision_key<'a>(output: &'a Path, flatten: bool) -> Result<Cow<'a, str>> {
+    if flatten {
+        let file_name = output
+            .file_name()
+            .with_context(|| format!("output path has no file name: {}", output.display()))?;
+        let file_name = file_name.to_string_lossy();
+        Ok(Cow::Owned(file_name.to_lowercase()))
+    } else {
+        Ok(output.to_string_lossy())
+    }
 }
 
 #[cfg(test)]
@@ -279,6 +293,27 @@ mod tests {
         fs::create_dir_all(&album_a).expect("create album-a");
         fs::create_dir_all(&album_b).expect("create album-b");
         let song_a = album_a.join("song.flac");
+        let song_b = album_b.join("song.flac");
+        fs::write(&song_a, b"").expect("create song a");
+        fs::write(&song_b, b"").expect("create song b");
+
+        let mut config = test_config(input_root.clone(), None);
+        config.flatten = true;
+        let error = plan(&config, vec![song_a, song_b]).expect_err("plan should fail");
+        assert!(error.to_string().contains("output collision detected"));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn flatten_detects_case_insensitive_collisions() {
+        let dir = test_dir("flatten-case-collision");
+        let input_root = dir.join("input");
+        let album_a = input_root.join("album-a");
+        let album_b = input_root.join("album-b");
+        fs::create_dir_all(&album_a).expect("create album-a");
+        fs::create_dir_all(&album_b).expect("create album-b");
+        let song_a = album_a.join("Song.flac");
         let song_b = album_b.join("song.flac");
         fs::write(&song_a, b"").expect("create song a");
         fs::write(&song_b, b"").expect("create song b");
