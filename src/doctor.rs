@@ -100,6 +100,7 @@ pub fn run(args: DoctorArgs) -> DoctorReport {
     diagnose(
         DoctorInput::from_args(args),
         ffmpeg::probe_version,
+        ffmpeg::probe_ffprobe_version,
         config::detected_cpu_cores,
     )
 }
@@ -107,9 +108,11 @@ pub fn run(args: DoctorArgs) -> DoctorReport {
 fn diagnose(
     input: DoctorInput,
     ffmpeg_probe: impl FnOnce() -> ffmpeg::VersionProbe,
+    ffprobe_probe: impl FnOnce() -> ffmpeg::VersionProbe,
     cpu_cores: impl FnOnce() -> usize,
 ) -> DoctorReport {
     let version_probe = ffmpeg_probe();
+    let ffprobe_version_probe = ffprobe_probe();
     let mut report = DoctorReport { checks: Vec::new() };
 
     if version_probe.executable_found {
@@ -122,6 +125,20 @@ fn diagnose(
         Ok(version) => report.push(DoctorCheck::ok("ffmpeg version", version)),
         Err(error) => report.push(DoctorCheck::failed(
             "ffmpeg version",
+            format!("unreadable ({error})"),
+        )),
+    }
+
+    if ffprobe_version_probe.executable_found {
+        report.push(DoctorCheck::ok("ffprobe", "found"));
+    } else {
+        report.push(DoctorCheck::failed("ffprobe", "not found"));
+    }
+
+    match ffprobe_version_probe.version {
+        Ok(version) => report.push(DoctorCheck::ok("ffprobe version", version)),
+        Err(error) => report.push(DoctorCheck::failed(
+            "ffprobe version",
             format!("unreadable ({error})"),
         )),
     }
@@ -245,7 +262,7 @@ fn add_input_checks(report: &mut DoctorReport, input: &DoctorInput, input_path: 
         Ok(planned_outputs) => {
             report.push(DoctorCheck::ok(
                 "output planning",
-                format!("{} output path(s) validated", planned_outputs),
+                format!("{planned_outputs} output path(s) validated"),
             ));
             report.push(DoctorCheck::ok(
                 "effective workers",
@@ -394,6 +411,13 @@ mod tests {
         }
     }
 
+    fn passing_ffprobe_probe() -> VersionProbe {
+        VersionProbe {
+            executable_found: true,
+            version: Ok("ffprobe version 7.1".to_string()),
+        }
+    }
+
     fn check<'a>(report: &'a DoctorReport, name: &str) -> &'a DoctorCheck {
         report
             .checks
@@ -404,15 +428,32 @@ mod tests {
 
     #[test]
     fn reports_ready_when_required_global_checks_pass() {
-        let report = diagnose(args(None, None, None), passing_probe, || 8);
+        let report = diagnose(
+            args(None, None, None),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
 
         assert!(report.is_ready());
-        assert_eq!(report.checks[0].status, CheckStatus::Ok);
-        assert_eq!(report.checks[0].detail, "found");
-        assert_eq!(report.checks[1].detail, "ffmpeg version 7.1");
-        assert_eq!(report.checks[2].detail, "8");
-        assert_eq!(report.checks[3].detail, "7");
-        assert_eq!(report.checks[4].detail, "global defaults are sane");
+        assert_eq!(check(&report, "ffmpeg").status, CheckStatus::Ok);
+        assert_eq!(check(&report, "ffmpeg").detail, "found");
+        assert_eq!(
+            check(&report, "ffmpeg version").detail,
+            "ffmpeg version 7.1"
+        );
+        assert_eq!(check(&report, "ffprobe").status, CheckStatus::Ok);
+        assert_eq!(check(&report, "ffprobe").detail, "found");
+        assert_eq!(
+            check(&report, "ffprobe version").detail,
+            "ffprobe version 7.1"
+        );
+        assert_eq!(check(&report, "cpu cores").detail, "8");
+        assert_eq!(check(&report, "default workers").detail, "7");
+        assert_eq!(
+            check(&report, "config sanity").detail,
+            "global defaults are sane"
+        );
     }
 
     #[test]
@@ -423,6 +464,7 @@ mod tests {
                 executable_found: false,
                 version: Err("failed to run ffmpeg -version".to_string()),
             },
+            passing_ffprobe_probe,
             || 4,
         );
 
@@ -435,7 +477,7 @@ mod tests {
                 .detail
                 .contains("failed to run ffmpeg -version")
         );
-        assert_eq!(report.checks[3].detail, "3");
+        assert_eq!(check(&report, "default workers").detail, "3");
     }
 
     #[test]
@@ -446,6 +488,7 @@ mod tests {
                 executable_found: true,
                 version: Err("ffmpeg -version exited with status 42".to_string()),
             },
+            passing_ffprobe_probe,
             || 4,
         );
 
@@ -461,6 +504,32 @@ mod tests {
     }
 
     #[test]
+    fn reports_not_ready_when_ffprobe_is_missing() {
+        let report = diagnose(
+            args(None, None, None),
+            passing_probe,
+            || VersionProbe {
+                executable_found: false,
+                version: Err("failed to run ffprobe -version".to_string()),
+            },
+            || 4,
+        );
+
+        assert!(!report.is_ready());
+        assert_eq!(check(&report, "ffprobe").status, CheckStatus::Failed);
+        assert_eq!(check(&report, "ffprobe").detail, "not found");
+        assert_eq!(
+            check(&report, "ffprobe version").status,
+            CheckStatus::Failed
+        );
+        assert!(
+            check(&report, "ffprobe version")
+                .detail
+                .contains("failed to run ffprobe -version")
+        );
+    }
+
+    #[test]
     fn warnings_do_not_make_report_not_ready() {
         let report = DoctorReport {
             checks: vec![DoctorCheck::warning("configured workers", "high")],
@@ -472,7 +541,12 @@ mod tests {
 
     #[test]
     fn reports_configured_workers_when_jobs_is_provided() {
-        let report = diagnose(args(None, None, Some(3)), passing_probe, || 8);
+        let report = diagnose(
+            args(None, None, Some(3)),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
 
         assert_eq!(check(&report, "configured workers").detail, "3");
         assert!(report.is_ready());
@@ -480,7 +554,12 @@ mod tests {
 
     #[test]
     fn warns_when_configured_workers_exceed_detected_cpu_cores() {
-        let report = diagnose(args(None, None, Some(20)), passing_probe, || 4);
+        let report = diagnose(
+            args(None, None, Some(20)),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 4,
+        );
 
         assert_eq!(
             check(&report, "worker oversubscription").status,
@@ -499,6 +578,7 @@ mod tests {
         let report = diagnose(
             args(Some(input.clone()), None, Some(2)),
             passing_probe,
+            passing_ffprobe_probe,
             || 8,
         );
 
@@ -520,7 +600,12 @@ mod tests {
         let input = dir.join("song.aiff");
         fs::write(&input, b"").expect("create input");
 
-        let report = diagnose(args(Some(input), None, Some(2)), passing_probe, || 8);
+        let report = diagnose(
+            args(Some(input), None, Some(2)),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
 
         assert_eq!(check(&report, "discoverable files").status, CheckStatus::Ok);
         assert_eq!(check(&report, "output planning").status, CheckStatus::Ok);
@@ -536,7 +621,12 @@ mod tests {
         fs::create_dir_all(dir.join("nested")).expect("create nested");
         fs::write(dir.join("nested/inner.flac"), b"").expect("create nested input");
 
-        let report = diagnose(args(Some(dir.clone()), None, Some(4)), passing_probe, || 8);
+        let report = diagnose(
+            args(Some(dir.clone()), None, Some(4)),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
 
         assert_eq!(check(&report, "input type").detail, "directory");
         assert!(
@@ -556,7 +646,12 @@ mod tests {
         fs::write(dir.join("top.flac"), b"").expect("create top-level flac input");
         fs::write(dir.join("top.aiff"), b"").expect("create top-level aiff input");
 
-        let report = diagnose(args(Some(dir.clone()), None, Some(4)), passing_probe, || 8);
+        let report = diagnose(
+            args(Some(dir.clone()), None, Some(4)),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
 
         assert_eq!(check(&report, "discoverable files").status, CheckStatus::Ok);
         assert!(
@@ -574,7 +669,12 @@ mod tests {
     fn empty_directory_fails_discoverable_files() {
         let dir = test_dir("empty-dir");
 
-        let report = diagnose(args(Some(dir.clone()), None, None), passing_probe, || 8);
+        let report = diagnose(
+            args(Some(dir.clone()), None, None),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
 
         assert_eq!(
             check(&report, "discoverable files").status,
@@ -590,7 +690,12 @@ mod tests {
     fn missing_input_fails_input_diagnostics() {
         let missing = test_dir("missing-input").join("missing");
 
-        let report = diagnose(args(Some(missing), None, None), passing_probe, || 8);
+        let report = diagnose(
+            args(Some(missing), None, None),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
 
         assert_eq!(check(&report, "input exists").status, CheckStatus::Failed);
         assert!(!report.is_ready());
@@ -602,7 +707,12 @@ mod tests {
         let input = dir.join("song.mp3");
         fs::write(&input, b"").expect("create input");
 
-        let report = diagnose(args(Some(input), None, None), passing_probe, || 8);
+        let report = diagnose(
+            args(Some(input), None, None),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
 
         assert_eq!(
             check(&report, "discoverable files").status,
@@ -617,7 +727,12 @@ mod tests {
     fn output_dir_existing_directory_passes() {
         let dir = test_dir("output-dir");
 
-        let report = diagnose(args(None, Some(dir.clone()), None), passing_probe, || 8);
+        let report = diagnose(
+            args(None, Some(dir.clone()), None),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
 
         assert_eq!(check(&report, "output directory").status, CheckStatus::Ok);
         assert!(report.is_ready());
@@ -631,7 +746,12 @@ mod tests {
         let output = dir.join("out");
         fs::write(&output, b"").expect("create output file");
 
-        let report = diagnose(args(None, Some(output), None), passing_probe, || 8);
+        let report = diagnose(
+            args(None, Some(output), None),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
 
         assert_eq!(
             check(&report, "output directory").status,
@@ -647,7 +767,12 @@ mod tests {
         let dir = test_dir("missing-output-dir");
         let output = dir.join("out").join("nested");
 
-        let report = diagnose(args(None, Some(output), None), passing_probe, || 8);
+        let report = diagnose(
+            args(None, Some(output), None),
+            passing_probe,
+            passing_ffprobe_probe,
+            || 8,
+        );
 
         assert_eq!(check(&report, "output directory").status, CheckStatus::Ok);
         assert!(

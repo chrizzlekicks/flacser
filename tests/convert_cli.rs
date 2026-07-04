@@ -471,6 +471,8 @@ fn doctor_succeeds_when_global_checks_pass() {
     assert!(stdout.contains("Doctor report:"));
     assert!(stdout.contains("[ok] ffmpeg: found"));
     assert!(stdout.contains("[ok] ffmpeg version: ffmpeg version 7.1-test"));
+    assert!(stdout.contains("[ok] ffprobe: found"));
+    assert!(stdout.contains("[ok] ffprobe version: ffprobe version test"));
     assert!(stdout.contains("[ok] cpu cores:"));
     assert!(stdout.contains("[ok] default workers:"));
     assert!(stdout.contains("[ok] config sanity: global defaults are sane"));
@@ -751,6 +753,40 @@ fn doctor_fails_when_ffmpeg_is_missing() {
     assert!(stdout.contains("[fail] ffmpeg version:"));
     assert!(stdout.contains("[ok] cpu cores:"));
     assert!(stdout.contains("[ok] default workers:"));
+    assert!(stdout.contains("Ready: no"));
+}
+
+#[test]
+fn doctor_fails_when_ffprobe_is_missing() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let bin_dir = tmp.path().join("bin");
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
+    );
+    let ffprobe = if cfg!(windows) {
+        bin_dir.join("ffprobe.cmd")
+    } else {
+        bin_dir.join("ffprobe")
+    };
+    fs::remove_file(ffprobe).expect("remove fake ffprobe");
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .env("PATH", &bin_dir)
+        .assert()
+        .failure();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[ok] ffmpeg: found"));
+    assert!(stdout.contains("[ok] ffmpeg version: ffmpeg version test"));
+    assert!(stdout.contains("[fail] ffprobe: not found"));
+    assert!(stdout.contains("[fail] ffprobe version:"));
     assert!(stdout.contains("Ready: no"));
 }
 

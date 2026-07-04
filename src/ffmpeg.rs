@@ -1,7 +1,7 @@
 use std::{
     io,
     path::Path,
-    process::{Command, Stdio},
+    process::{Command, Output, Stdio},
 };
 
 use anyhow::{Context, Result, bail};
@@ -49,6 +49,19 @@ pub fn read_version() -> Result<String> {
 
 pub fn probe_version() -> VersionProbe {
     match read_version_output() {
+        Ok(output) => VersionProbe {
+            executable_found: true,
+            version: Ok(output.version),
+        },
+        Err(error) => VersionProbe {
+            executable_found: !error.spawn_failed,
+            version: Err(error.message),
+        },
+    }
+}
+
+pub fn probe_ffprobe_version() -> VersionProbe {
+    match read_ffprobe_version_output() {
         Ok(output) => VersionProbe {
             executable_found: true,
             version: Ok(output.version),
@@ -114,27 +127,42 @@ fn run_command_candidate<T>(
 }
 
 fn read_version_output() -> std::result::Result<VersionOutput, VersionError> {
-    let output = run_ffmpeg_candidate(|candidate| {
+    read_command_version_output("ffmpeg", run_ffmpeg_candidate)
+}
+
+fn read_ffprobe_version_output() -> std::result::Result<VersionOutput, VersionError> {
+    read_command_version_output("ffprobe", run_ffprobe_candidate)
+}
+
+fn read_command_version_output(
+    command_name: &str,
+    run_candidate: impl FnOnce(fn(&str) -> io::Result<Output>) -> io::Result<Output>,
+) -> std::result::Result<VersionOutput, VersionError> {
+    fn read_candidate_version(candidate: &str) -> io::Result<Output> {
         Command::new(candidate)
             .arg("-version")
             .stdin(Stdio::null())
             .output()
-    })
-    .map_err(|error| VersionError {
+    }
+
+    let output = run_candidate(read_candidate_version).map_err(|error| VersionError {
         spawn_failed: true,
-        message: format!("failed to run ffmpeg -version: {error}"),
+        message: format!("failed to run {command_name} -version: {error}"),
     })?;
 
     if !output.status.success() {
         return Err(VersionError {
             spawn_failed: false,
-            message: format!("ffmpeg -version exited with status {}", output.status),
+            message: format!(
+                "{command_name} -version exited with status {}",
+                output.status
+            ),
         });
     }
 
     let stdout = String::from_utf8(output.stdout).map_err(|error| VersionError {
         spawn_failed: false,
-        message: format!("ffmpeg version output is not UTF-8: {error}"),
+        message: format!("{command_name} version output is not UTF-8: {error}"),
     })?;
     let first_line = stdout
         .lines()
@@ -143,7 +171,7 @@ fn read_version_output() -> std::result::Result<VersionOutput, VersionError> {
         .filter(|line| !line.is_empty())
         .ok_or_else(|| VersionError {
             spawn_failed: false,
-            message: "ffmpeg version output was empty".to_string(),
+            message: format!("{command_name} version output was empty"),
         })?;
 
     Ok(VersionOutput {
