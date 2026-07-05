@@ -99,7 +99,7 @@ Output: Vec<PathBuf>
 - derive output paths
 - preserve relative structure
 - validate output directory
-- detect collisions
+- detect collisions on exact output paths, or on flattened output file-name bytes with ASCII lowercasing when `--flatten` is enabled
 
 Output: Vec<ConversionJob>
 
@@ -161,13 +161,22 @@ Each job must be independent:
 Directory mode:
 
 - preserve relative structure
+- without flatten mode, fail on exact output-path collisions
+- with flatten mode, write outputs directly under the output root and fail if flattened output file names collide, including ASCII case-insensitive pairs such as `Song.aiff` and `song.aiff`
 
 Example:
 
-input/album/song.flac  
-→ output/album/song.aiff
+```text
+input/album/song.flac
+-> output/album/song.aiff
+```
 
-No flattening in v1.
+Flatten example:
+
+```text
+input/album/song.flac
+-> output/song.aiff
+```
 
 ---
 
@@ -202,7 +211,6 @@ Must not contain core logic.
 
 Future additions:
 
-- flatten mode
 - fail-fast mode
 - support conversion to `.wav`
 - GUI (e.g. Tauri)

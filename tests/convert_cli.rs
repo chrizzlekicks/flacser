@@ -530,6 +530,8 @@ fn convert_help_shows_expected_contract() {
     assert!(stdout.contains("Recurse into subdirectories when the input path is a directory"));
     assert!(stdout.contains("-j, --jobs <JOBS>"));
     assert!(stdout.contains("Limit the number of parallel conversion jobs"));
+    assert!(stdout.contains("-f, --flatten"));
+    assert!(stdout.contains("Write all converted files directly into the output directory"));
 }
 
 #[test]
@@ -1015,4 +1017,77 @@ fn convert_continues_after_failure_and_reports_partial_batch_failure() {
     );
     assert!(output_dir.join("good.aiff").exists());
     assert!(!output_dir.join("bad.aiff").exists());
+}
+
+#[test]
+fn convert_directory_flattens_output_with_flatten() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input_dir = tmp.path().join("music");
+    let out_dir = tmp.path().join("aiff");
+    let album_a = input_dir.join("album-a");
+    let album_b = input_dir.join("album-b");
+    fs::create_dir_all(&album_a).expect("create album-a");
+    fs::create_dir_all(&album_b).expect("create album-b");
+    let song_a = album_a.join("song.flac");
+    let track_b = album_b.join("track.flac");
+    write_file(&song_a);
+    write_file(&track_b);
+
+    let bin_dir = tmp.path().join("bin");
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: true,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input_dir)
+        .arg("--recursive")
+        .arg("--flatten")
+        .arg("--output-dir")
+        .arg(&out_dir)
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("total=2"));
+    assert!(stdout.contains("converted=2"));
+    assert!(stdout.contains("failed=0"));
+    assert!(out_dir.join("song.aiff").exists());
+    assert!(out_dir.join("track.aiff").exists());
+}
+
+#[test]
+fn convert_flatten_fails_on_basename_collision() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input_dir = tmp.path().join("music");
+    let album_a = input_dir.join("album-a");
+    let album_b = input_dir.join("album-b");
+    fs::create_dir_all(&album_a).expect("create album-a");
+    fs::create_dir_all(&album_b).expect("create album-b");
+    let song_a = album_a.join("song.flac");
+    let song_b = album_b.join("song.flac");
+    write_file(&song_a);
+    write_file(&song_b);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input_dir)
+        .arg("--recursive")
+        .arg("--flatten")
+        .arg("--dry-run")
+        .assert()
+        .failure();
+
+    let stderr = stderr_text(&assert);
+    assert!(stderr.contains("output collision detected"));
 }
