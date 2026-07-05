@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/chrizzlekicks/flacser/compare/v0.5.1...v0.6.0) (2026-07-05)
+
+
+### Features
+
+* **flacser:** add --flatten flag ([#11](https://github.com/chrizzlekicks/flacser/issues/11)) ([16a1048](https://github.com/chrizzlekicks/flacser/commit/16a1048000a57bb67b7c336e3217d17f0119e82e))
+
 ## [0.5.1](https://github.com/chrizzlekicks/flacser/compare/v0.5.0...v0.5.1) (2026-06-10)
 
 
