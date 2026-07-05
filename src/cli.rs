@@ -48,7 +48,7 @@ pub struct ConvertArgs {
     pub jobs: Option<NonZeroUsize>,
 
     /// Write all converted files directly into the output directory, ignoring input subdirectories.
-    #[arg(long, default_value_t = false)]
+    #[arg(short = 'f', long, default_value_t = false)]
     pub flatten: bool,
 }
 

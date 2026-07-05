@@ -63,7 +63,7 @@ flacser <COMMAND> [OPTIONS]
 - `--overwrite, -w`: replace existing outputs
 - `--dry-run, -n`: plan/execute flow without running `ffmpeg`
 - `--recursive, -r`: recurse into subdirectories in directory mode
-- `--flatten`: write all converted files directly into the output directory and fail if flattened output names collide
+- `--flatten, -f`: write recursive directory outputs directly into the output directory and fail if flattened output names collide
 - `--jobs <JOBS>, -j <JOBS>`: set the number of parallel conversion jobs
 
 `doctor`:
@@ -86,7 +86,8 @@ flacser <COMMAND> [OPTIONS]
 - Finds `.flac` files case-insensitively
 - Preserves relative structure from the input root
 - Non-flatten planning checks collisions on exact output paths
-- With `--flatten`, writes all outputs directly into the output root and fails if flattened output names collide, including ASCII case-insensitive pairs such as `Song.aiff` and `song.aiff`
+- With `--recursive --flatten`, writes all outputs directly into the output root and fails if flattened output names collide, including ASCII case-insensitive pairs such as `Song.aiff` and `song.aiff`
+- `--flatten` has no effect without `--recursive` because non-recursive discovery only sees top-level files
 - Skips outputs that already exist
 
 ### Execution and exits

@@ -530,7 +530,7 @@ fn convert_help_shows_expected_contract() {
     assert!(stdout.contains("Recurse into subdirectories when the input path is a directory"));
     assert!(stdout.contains("-j, --jobs <JOBS>"));
     assert!(stdout.contains("Limit the number of parallel conversion jobs"));
-    assert!(stdout.contains("--flatten"));
+    assert!(stdout.contains("-f, --flatten"));
     assert!(stdout.contains("Write all converted files directly into the output directory"));
 }
 
