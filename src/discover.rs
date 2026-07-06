@@ -74,7 +74,6 @@ mod tests {
         Config {
             input_path,
             output_dir: None,
-            overwrite: false,
             dry_run: false,
             recursive: false,
             flatten: false,
@@ -86,7 +85,6 @@ mod tests {
         Config {
             input_path,
             output_dir: None,
-            overwrite: false,
             dry_run: false,
             recursive: true,
             flatten: false,

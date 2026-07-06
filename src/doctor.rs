@@ -181,7 +181,6 @@ impl DoctorInput {
         Config {
             input_path,
             output_dir: self.output_dir.clone(),
-            overwrite: false,
             dry_run: true,
             recursive: false,
             flatten: false,
