@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/chrizzlekicks/flacser/compare/v0.6.0...v0.7.0) (2026-07-07)
+
+
+### Features
+
+* remove --overwrite flag ([#13](https://github.com/chrizzlekicks/flacser/issues/13)) ([2b04b28](https://github.com/chrizzlekicks/flacser/commit/2b04b289dad7d5dccf2e392f70a803ea60ee5cf4))
+
 ## [0.6.0](https://github.com/chrizzlekicks/flacser/compare/v0.5.1...v0.6.0) (2026-07-05)
 
 
