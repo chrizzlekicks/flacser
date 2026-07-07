@@ -6,7 +6,6 @@ use crate::cli::ConvertArgs;
 pub struct Config {
     pub input_path: PathBuf,
     pub output_dir: Option<PathBuf>,
-    pub overwrite: bool,
     pub dry_run: bool,
     pub recursive: bool,
     pub flatten: bool,
@@ -18,7 +17,6 @@ impl Config {
         Self {
             input_path: convert.input_path,
             output_dir: convert.output_dir,
-            overwrite: convert.overwrite,
             dry_run: convert.dry_run,
             recursive: convert.recursive,
             flatten: convert.flatten,
@@ -58,7 +56,6 @@ mod tests {
         let args = ConvertArgs {
             input_path: PathBuf::from("in.flac"),
             output_dir: Some(PathBuf::from("out")),
-            overwrite: true,
             dry_run: true,
             recursive: true,
             flatten: true,
@@ -69,7 +66,6 @@ mod tests {
 
         assert_eq!(config.input_path, PathBuf::from("in.flac"));
         assert_eq!(config.output_dir, Some(PathBuf::from("out")));
-        assert!(config.overwrite);
         assert!(config.dry_run);
         assert!(config.recursive);
         assert!(config.flatten);
@@ -81,7 +77,6 @@ mod tests {
         let args = ConvertArgs {
             input_path: PathBuf::from("in.flac"),
             output_dir: None,
-            overwrite: false,
             dry_run: false,
             recursive: false,
             flatten: false,

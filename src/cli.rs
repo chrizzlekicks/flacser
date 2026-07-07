@@ -31,10 +31,6 @@ pub struct ConvertArgs {
     #[arg(short = 'o', long)]
     pub output_dir: Option<PathBuf>,
 
-    /// Replace existing output files instead of skipping them.
-    #[arg(short = 'w', long, default_value_t = false)]
-    pub overwrite: bool,
-
     /// Print the conversion plan without running `ffmpeg`.
     #[arg(short = 'n', long, default_value_t = false)]
     pub dry_run: bool,

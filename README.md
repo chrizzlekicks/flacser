@@ -60,7 +60,6 @@ flacser <COMMAND> [OPTIONS]
 `convert`:
 
 - `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: write outputs into a specific directory
-- `--overwrite, -w`: replace existing outputs
 - `--dry-run, -n`: plan/execute flow without running `ffmpeg`
 - `--recursive, -r`: recurse into subdirectories in directory mode
 - `--flatten, -f`: write recursive directory outputs directly into the output directory and fail if flattened output names collide

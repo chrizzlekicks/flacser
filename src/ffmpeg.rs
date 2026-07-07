@@ -114,10 +114,7 @@ fn read_version_output() -> std::result::Result<VersionOutput, VersionError> {
 }
 
 pub fn is_needed(config: &Config, jobs: &[ConversionJob]) -> bool {
-    !config.dry_run
-        && jobs
-            .iter()
-            .any(|job| config.overwrite || !job.output.exists())
+    !config.dry_run && jobs.iter().any(|job| !job.output.exists())
 }
 
 pub fn run_ffmpeg(input: &Path, output: &Path) -> Result<()> {

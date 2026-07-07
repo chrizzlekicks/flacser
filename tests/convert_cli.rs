@@ -522,8 +522,6 @@ fn convert_help_shows_expected_contract() {
     assert!(stdout.contains("Input `.flac` file or directory to convert"));
     assert!(stdout.contains("-o, --output-dir <OUTPUT_DIR>"));
     assert!(stdout.contains("Write converted `.aiff` files into this directory"));
-    assert!(stdout.contains("-w, --overwrite"));
-    assert!(stdout.contains("Replace existing output files instead of skipping them"));
     assert!(stdout.contains("-n, --dry-run"));
     assert!(stdout.contains("Print the conversion plan without running `ffmpeg`"));
     assert!(stdout.contains("-r, --recursive"));
@@ -736,43 +734,6 @@ fn convert_skips_existing_output() {
     assert!(stdout.contains("converted=0"));
     assert!(stdout.contains("skipped=1"));
     assert!(stdout.contains("failed=0"));
-}
-
-#[test]
-fn convert_overwrite_converts_existing_output() {
-    let tmp = TempDir::new().expect("create temp dir");
-    let input = tmp.path().join("song.flac");
-    let output = tmp.path().join("song.aiff");
-    let bin_dir = tmp.path().join("bin");
-    write_file(&input);
-    fs::write(&output, b"old").expect("write existing output");
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-
-    install_fake_ffmpeg(
-        &bin_dir,
-        FakeFfmpeg::WriteOutput {
-            contents: "new",
-            create_parent: false,
-        },
-    );
-
-    let path = prepend_path(&bin_dir);
-
-    let assert = Command::cargo_bin("flacser")
-        .expect("build flacser binary")
-        .arg("convert")
-        .arg(&input)
-        .arg("--overwrite")
-        .env("PATH", path)
-        .assert()
-        .success();
-
-    let stdout = stdout_text(&assert);
-    assert!(stdout.contains("total=1"));
-    assert!(stdout.contains("converted=1"));
-    assert!(stdout.contains("skipped=0"));
-    assert!(stdout.contains("failed=0"));
-    assert_eq!(fs::read(&output).expect("read output"), b"new");
 }
 
 #[test]
