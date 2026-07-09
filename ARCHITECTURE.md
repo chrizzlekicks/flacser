@@ -127,6 +127,7 @@ Output: Vec<ConversionJob>
 - probe `ffmpeg` availability and version
 - check detected CPU cores and default worker calculation
 - optionally validate an input path, output directory, and configured job limit
+- validate directory inputs with recursive discovery (always scans subdirectories)
 - return a read-only report with `ok`, `warn`, and `fail` checks
 - exit non-zero when any required check fails
 

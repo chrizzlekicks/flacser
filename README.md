@@ -70,6 +70,8 @@ flacser <COMMAND> [OPTIONS]
 - `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: diagnose a specific output directory
 - `--jobs <JOBS>, -j <JOBS>`: diagnose a specific parallel worker limit
 
+`doctor` always discovers `.flac` files recursively when validating a directory input.
+
 ## Behavior
 
 ### File mode
@@ -104,6 +106,7 @@ flacser <COMMAND> [OPTIONS]
 - Verifies `ffmpeg` availability and version
 - Checks detected CPU cores and default worker settings
 - Optionally validates an input path, output directory, and configured worker limit
+- Validates directory inputs with recursive discovery (always scans subdirectories)
 - Exits non-zero when any required check fails
 
 ## Examples

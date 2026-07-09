@@ -1052,3 +1052,34 @@ fn convert_flatten_fails_on_basename_collision() {
     let stderr = stderr_text(&assert);
     assert!(stderr.contains("output collision detected"));
 }
+
+#[test]
+fn doctor_directory_with_only_nested_flacs_succeeds() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let bin_dir = tmp.path().join("bin");
+    let nested = tmp.path().join("nested");
+    let nested_flac = nested.join("song.flac");
+    fs::create_dir_all(&nested).expect("create nested dir");
+    write_file(&nested_flac);
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg(tmp.path())
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[ok] discoverable files: 1 .flac file(s) found"));
+    assert!(stdout.contains("Ready: yes"));
+}

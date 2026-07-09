@@ -182,7 +182,7 @@ impl DoctorInput {
             input_path,
             output_dir: self.output_dir.clone(),
             dry_run: true,
-            recursive: false,
+            recursive: true,
             flatten: false,
             jobs: self.jobs.unwrap_or_else(config::default_jobs),
         }
@@ -222,7 +222,7 @@ fn add_input_checks(report: &mut DoctorReport, input: &DoctorInput, input_path: 
     if inputs.is_empty() {
         report.push(DoctorCheck::failed(
             "discoverable files",
-            "0 .flac files found with non-recursive discovery",
+            "0 .flac files found",
         ));
         report.push(DoctorCheck::ok("effective workers", "0"));
         return;
@@ -230,10 +230,7 @@ fn add_input_checks(report: &mut DoctorReport, input: &DoctorInput, input_path: 
 
     report.push(DoctorCheck::ok(
         "discoverable files",
-        format!(
-            "{} .flac file(s) found with non-recursive discovery",
-            inputs.len()
-        ),
+        format!("{} .flac file(s) found", inputs.len()),
     ));
 
     let job_count = inputs.len();
@@ -476,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn valid_directory_input_uses_non_recursive_discovery() {
+    fn valid_directory_input_uses_recursive_discovery() {
         let dir = test_dir("dir-input");
         fs::write(dir.join("top.flac"), b"").expect("create top-level input");
         fs::create_dir_all(dir.join("nested")).expect("create nested");
@@ -488,9 +485,9 @@ mod tests {
         assert!(
             check(&report, "discoverable files")
                 .detail
-                .starts_with("1 .flac")
+                .starts_with("2 .flac")
         );
-        assert_eq!(check(&report, "effective workers").detail, "1");
+        assert_eq!(check(&report, "effective workers").detail, "2");
         assert!(report.is_ready());
 
         let _ = fs::remove_dir_all(dir);
