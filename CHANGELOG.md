@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/chrizzlekicks/flacser/compare/v0.7.0...v0.7.1) (2026-07-10)
+
+
+### Bug Fixes
+
+* **flacser:** make doctor discover files recursively by default ([#15](https://github.com/chrizzlekicks/flacser/issues/15)) ([4ee8718](https://github.com/chrizzlekicks/flacser/commit/4ee871818ca890b409c01150223fb070ad96b2ad))
+
 ## [0.7.0](https://github.com/chrizzlekicks/flacser/compare/v0.6.0...v0.7.0) (2026-07-07)
 
 
