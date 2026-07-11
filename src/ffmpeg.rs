@@ -180,10 +180,7 @@ fn read_command_version_output(
 }
 
 pub fn is_needed(config: &Config, jobs: &[ConversionJob]) -> bool {
-    !config.dry_run
-        && jobs
-            .iter()
-            .any(|job| config.overwrite || !job.output.exists())
+    !config.dry_run && jobs.iter().any(|job| !job.output.exists())
 }
 
 pub fn probe_is_needed(config: &Config, jobs: &[ConversionJob]) -> bool {

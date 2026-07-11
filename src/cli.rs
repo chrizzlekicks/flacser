@@ -37,10 +37,6 @@ pub struct ConvertArgs {
     #[arg(short = 'o', long)]
     pub output_dir: Option<PathBuf>,
 
-    /// Replace existing output files instead of skipping them.
-    #[arg(short = 'w', long, default_value_t = false)]
-    pub overwrite: bool,
-
     /// Print the conversion plan without running `ffmpeg`.
     #[arg(short = 'n', long, default_value_t = false)]
     pub dry_run: bool,
@@ -52,6 +48,10 @@ pub struct ConvertArgs {
     /// Limit the number of parallel conversion jobs.
     #[arg(short = 'j', long)]
     pub jobs: Option<NonZeroUsize>,
+
+    /// Write all converted files directly into the output directory, ignoring input subdirectories.
+    #[arg(short = 'f', long, default_value_t = false)]
+    pub flatten: bool,
 }
 
 #[derive(Debug, clap::Args)]

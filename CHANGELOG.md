@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.1](https://github.com/chrizzlekicks/flacser/compare/v0.7.0...v0.7.1) (2026-07-10)
+
+
+### Bug Fixes
+
+* **flacser:** make doctor discover files recursively by default ([#15](https://github.com/chrizzlekicks/flacser/issues/15)) ([4ee8718](https://github.com/chrizzlekicks/flacser/commit/4ee871818ca890b409c01150223fb070ad96b2ad))
+
+## [0.7.0](https://github.com/chrizzlekicks/flacser/compare/v0.6.0...v0.7.0) (2026-07-07)
+
+
+### Features
+
+* remove --overwrite flag ([#13](https://github.com/chrizzlekicks/flacser/issues/13)) ([2b04b28](https://github.com/chrizzlekicks/flacser/commit/2b04b289dad7d5dccf2e392f70a803ea60ee5cf4))
+
+## [0.6.0](https://github.com/chrizzlekicks/flacser/compare/v0.5.1...v0.6.0) (2026-07-05)
+
+
+### Features
+
+* **flacser:** add --flatten flag ([#11](https://github.com/chrizzlekicks/flacser/issues/11)) ([16a1048](https://github.com/chrizzlekicks/flacser/commit/16a1048000a57bb67b7c336e3217d17f0119e82e))
+
 ## [0.5.1](https://github.com/chrizzlekicks/flacser/compare/v0.5.0...v0.5.1) (2026-06-10)
 
 

@@ -11,9 +11,9 @@ const CONVERT_TO_ENV: &str = "FLACSER_CONVERT_TO";
 pub struct Config {
     pub input_path: PathBuf,
     pub output_dir: Option<PathBuf>,
-    pub overwrite: bool,
     pub dry_run: bool,
     pub recursive: bool,
+    pub flatten: bool,
     pub jobs: usize,
     pub target_format: AudioFormat,
 }
@@ -23,9 +23,9 @@ impl Config {
         Ok(Self {
             input_path: convert.input_path,
             output_dir: convert.output_dir,
-            overwrite: convert.overwrite,
             dry_run: convert.dry_run,
             recursive: convert.recursive,
+            flatten: convert.flatten,
             jobs: convert
                 .jobs
                 .map(NonZeroUsize::get)
@@ -66,9 +66,9 @@ mod tests {
             input_path: PathBuf::from("in.flac"),
             to: Some(crate::audio_format::AudioFormat::Aiff),
             output_dir: Some(PathBuf::from("out")),
-            overwrite: true,
             dry_run: true,
             recursive: true,
+            flatten: true,
             jobs: NonZeroUsize::new(2),
         };
 
@@ -76,9 +76,9 @@ mod tests {
 
         assert_eq!(config.input_path, PathBuf::from("in.flac"));
         assert_eq!(config.output_dir, Some(PathBuf::from("out")));
-        assert!(config.overwrite);
         assert!(config.dry_run);
         assert!(config.recursive);
+        assert!(config.flatten);
         assert_eq!(config.jobs, 2);
         assert_eq!(config.target_format, crate::audio_format::AudioFormat::Aiff);
     }
@@ -89,9 +89,9 @@ mod tests {
             input_path: PathBuf::from("in.flac"),
             to: Some(crate::audio_format::AudioFormat::Aiff),
             output_dir: None,
-            overwrite: false,
             dry_run: false,
             recursive: false,
+            flatten: false,
             jobs: None,
         };
 

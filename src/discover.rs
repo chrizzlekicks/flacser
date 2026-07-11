@@ -86,9 +86,9 @@ mod tests {
         Config {
             input_path,
             output_dir: None,
-            overwrite: false,
             dry_run: false,
             recursive: false,
+            flatten: false,
             jobs: 1,
             target_format: crate::audio_format::AudioFormat::Aiff,
         }
@@ -98,9 +98,9 @@ mod tests {
         Config {
             input_path,
             output_dir: None,
-            overwrite: false,
             dry_run: false,
             recursive: true,
+            flatten: false,
             jobs: 1,
             target_format: crate::audio_format::AudioFormat::Aiff,
         }

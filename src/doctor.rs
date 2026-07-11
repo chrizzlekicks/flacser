@@ -203,9 +203,9 @@ impl DoctorInput {
         Config {
             input_path,
             output_dir: self.output_dir.clone(),
-            overwrite: false,
             dry_run: true,
-            recursive: false,
+            recursive: true,
+            flatten: false,
             jobs: self.jobs.unwrap_or_else(config::default_jobs),
             target_format: self.target_format.unwrap_or(AudioFormat::Flac),
         }
@@ -653,7 +653,7 @@ mod tests {
     }
 
     #[test]
-    fn valid_directory_input_uses_non_recursive_discovery() {
+    fn valid_directory_input_uses_recursive_discovery() {
         let dir = test_dir("dir-input");
         fs::write(dir.join("top.flac"), b"").expect("create top-level input");
         fs::create_dir_all(dir.join("nested")).expect("create nested");
@@ -672,7 +672,7 @@ mod tests {
                 .detail
                 .starts_with("1 supported audio")
         );
-        assert_eq!(check(&report, "effective workers").detail, "1");
+        assert_eq!(check(&report, "effective workers").detail, "2");
         assert!(report.is_ready());
 
         let _ = fs::remove_dir_all(dir);

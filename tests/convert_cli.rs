@@ -907,14 +907,14 @@ fn convert_help_shows_expected_contract() {
     assert!(stdout.contains("Target format: flac, aiff, or wav"));
     assert!(stdout.contains("-o, --output-dir <OUTPUT_DIR>"));
     assert!(stdout.contains("Write converted files into this directory"));
-    assert!(stdout.contains("-w, --overwrite"));
-    assert!(stdout.contains("Replace existing output files instead of skipping them"));
     assert!(stdout.contains("-n, --dry-run"));
     assert!(stdout.contains("Print the conversion plan without running `ffmpeg`"));
     assert!(stdout.contains("-r, --recursive"));
     assert!(stdout.contains("Recurse into subdirectories when the input path is a directory"));
     assert!(stdout.contains("-j, --jobs <JOBS>"));
     assert!(stdout.contains("Limit the number of parallel conversion jobs"));
+    assert!(stdout.contains("-f, --flatten"));
+    assert!(stdout.contains("Write all converted files directly into the output directory"));
 }
 
 #[test]
@@ -1137,45 +1137,6 @@ fn convert_skips_existing_output() {
     assert!(stdout.contains("converted=0"));
     assert!(stdout.contains("skipped=1"));
     assert!(stdout.contains("failed=0"));
-}
-
-#[test]
-fn convert_overwrite_converts_existing_output() {
-    let tmp = TempDir::new().expect("create temp dir");
-    let input = tmp.path().join("song.flac");
-    let output = tmp.path().join("song.aiff");
-    let bin_dir = tmp.path().join("bin");
-    write_file(&input);
-    fs::write(&output, b"old").expect("write existing output");
-    fs::create_dir_all(&bin_dir).expect("create bin dir");
-
-    install_fake_ffmpeg(
-        &bin_dir,
-        FakeFfmpeg::WriteOutput {
-            contents: "new",
-            create_parent: false,
-        },
-    );
-
-    let path = prepend_path(&bin_dir);
-
-    let assert = Command::cargo_bin("flacser")
-        .expect("build flacser binary")
-        .arg("convert")
-        .arg(&input)
-        .arg("--to")
-        .arg("aiff")
-        .arg("--overwrite")
-        .env("PATH", path)
-        .assert()
-        .success();
-
-    let stdout = stdout_text(&assert);
-    assert!(stdout.contains("total=1"));
-    assert!(stdout.contains("converted=1"));
-    assert!(stdout.contains("skipped=0"));
-    assert!(stdout.contains("failed=0"));
-    assert_eq!(fs::read(&output).expect("read output"), b"new");
 }
 
 #[test]
@@ -1432,4 +1393,108 @@ fn convert_continues_after_failure_and_reports_partial_batch_failure() {
     );
     assert!(output_dir.join("good.aiff").exists());
     assert!(!output_dir.join("bad.aiff").exists());
+}
+
+#[test]
+fn convert_directory_flattens_output_with_flatten() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input_dir = tmp.path().join("music");
+    let out_dir = tmp.path().join("aiff");
+    let album_a = input_dir.join("album-a");
+    let album_b = input_dir.join("album-b");
+    fs::create_dir_all(&album_a).expect("create album-a");
+    fs::create_dir_all(&album_b).expect("create album-b");
+    let song_a = album_a.join("song.flac");
+    let track_b = album_b.join("track.flac");
+    write_file(&song_a);
+    write_file(&track_b);
+
+    let bin_dir = tmp.path().join("bin");
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: true,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input_dir)
+        .arg("--recursive")
+        .arg("--flatten")
+        .arg("--output-dir")
+        .arg(&out_dir)
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("total=2"));
+    assert!(stdout.contains("converted=2"));
+    assert!(stdout.contains("failed=0"));
+    assert!(out_dir.join("song.aiff").exists());
+    assert!(out_dir.join("track.aiff").exists());
+}
+
+#[test]
+fn convert_flatten_fails_on_basename_collision() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input_dir = tmp.path().join("music");
+    let album_a = input_dir.join("album-a");
+    let album_b = input_dir.join("album-b");
+    fs::create_dir_all(&album_a).expect("create album-a");
+    fs::create_dir_all(&album_b).expect("create album-b");
+    let song_a = album_a.join("song.flac");
+    let song_b = album_b.join("song.flac");
+    write_file(&song_a);
+    write_file(&song_b);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input_dir)
+        .arg("--recursive")
+        .arg("--flatten")
+        .arg("--dry-run")
+        .assert()
+        .failure();
+
+    let stderr = stderr_text(&assert);
+    assert!(stderr.contains("output collision detected"));
+}
+
+#[test]
+fn doctor_directory_with_only_nested_flacs_succeeds() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let bin_dir = tmp.path().join("bin");
+    let nested = tmp.path().join("nested");
+    let nested_flac = nested.join("song.flac");
+    fs::create_dir_all(&nested).expect("create nested dir");
+    write_file(&nested_flac);
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg(tmp.path())
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[ok] discoverable files: 1 .flac file(s) found"));
+    assert!(stdout.contains("Ready: yes"));
 }

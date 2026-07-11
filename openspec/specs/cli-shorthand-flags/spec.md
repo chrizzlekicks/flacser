@@ -1,14 +1,14 @@
 ## Requirements
 
 ### Requirement: Convert command supports shorthand flag aliases
-The `flacser convert` command SHALL accept documented single-letter shorthand aliases for supported options while preserving the existing long-form flags. The shorthand contract SHALL be `-o` for `--output-dir`, `-w` for `--overwrite`, `-n` for `--dry-run`, `-r` for `--recursive`, and `-j` for `--jobs`.
+The `flacser convert` command SHALL accept documented single-letter shorthand aliases for supported options while preserving the existing long-form flags. The shorthand contract SHALL be `-o` for `--output-dir`, `-n` for `--dry-run`, `-r` for `--recursive`, `-f` for `--flatten`, and `-j` for `--jobs`.
 
 #### Scenario: Help output documents shorthand aliases
 - **WHEN** a user runs `flacser convert --help`
 - **THEN** the help output includes `-o, --output-dir <OUTPUT_DIR>`
-- **THEN** the help output includes `-w, --overwrite`
 - **THEN** the help output includes `-n, --dry-run`
 - **THEN** the help output includes `-r, --recursive`
+- **THEN** the help output includes `-f, --flatten`
 - **THEN** the help output includes `-j, --jobs <JOBS>`
 
 #### Scenario: Shorthand boolean flags are accepted

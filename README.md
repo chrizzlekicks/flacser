@@ -62,9 +62,9 @@ flacser <COMMAND> [OPTIONS]
 
 - `--to <FORMAT>`: target format (`flac`, `aiff`, or `wav`); required unless `FLACSER_CONVERT_TO` is set
 - `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: write outputs into a specific directory
-- `--overwrite, -w`: replace existing outputs
 - `--dry-run, -n`: plan/execute flow without running `ffmpeg` or `ffprobe`
 - `--recursive, -r`: recurse into subdirectories in directory mode
+- `--flatten, -f`: write recursive directory outputs directly into the output directory and fail if flattened output names collide
 - `--jobs <JOBS>, -j <JOBS>`: set the number of parallel conversion jobs
 
 `doctor`:
@@ -72,6 +72,8 @@ flacser <COMMAND> [OPTIONS]
 - `--to <FORMAT>`: target format (`flac`, `aiff`, or `wav`) to validate conversion planning; falls back to `FLACSER_CONVERT_TO`
 - `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: diagnose a specific output directory
 - `--jobs <JOBS>, -j <JOBS>`: diagnose a specific parallel worker limit
+
+`doctor` always discovers `.flac` files recursively when validating a directory input.
 
 ## Behavior
 
@@ -91,6 +93,9 @@ flacser <COMMAND> [OPTIONS]
 - Finds `.flac`, `.aiff`, `.aif`, and `.wav` files case-insensitively
 - Preserves relative structure from the input root
 - Uses the target format's canonical extension; AIFF outputs use `.aiff`
+- Non-flatten planning checks collisions on exact output paths
+- With `--recursive --flatten`, writes all outputs directly into the output root and fails if flattened output names collide, including ASCII case-insensitive pairs such as `Song.aiff` and `song.aiff`
+- `--flatten` has no effect without `--recursive` because non-recursive discovery only sees top-level files
 - Skips outputs that already exist
 
 ### Execution and exits
@@ -109,6 +114,7 @@ flacser <COMMAND> [OPTIONS]
 - Checks detected CPU cores and default worker settings
 - Optionally validates an input path, target format, output directory, and configured worker limit
 - Requires `--to` or `FLACSER_CONVERT_TO` to validate output planning for an input path
+- Validates directory inputs with recursive discovery (always scans subdirectories)
 - Exits non-zero when any required check fails
 
 ## Examples
@@ -141,6 +147,12 @@ Environment fallback target:
 
 ```bash
 FLACSER_CONVERT_TO=aiff flacser convert ./music
+```
+
+Flatten recursive directory output:
+
+```bash
+flacser convert ./music --recursive --flatten --output-dir ./out
 ```
 
 System readiness check:

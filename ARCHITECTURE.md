@@ -118,8 +118,8 @@ Output: Vec<PathBuf>
 - use the target format canonical extension
 - preserve relative structure
 - validate output directory
-- detect collisions
 - reject same-format conversion
+- detect collisions on exact output paths, or on flattened output file-name bytes with ASCII lowercasing when `--flatten` is enabled
 
 Output: Vec<ConversionJob>
 
@@ -149,6 +149,7 @@ Output: Vec<ConversionJob>
 - check detected CPU cores and default worker calculation
 - optionally validate an input path, target format, output directory, and configured job limit
 - reuse convert discovery and planning when a target is provided
+- validate directory inputs with recursive discovery (always scans subdirectories)
 - return a read-only report with `ok`, `warn`, and `fail` checks
 - exit non-zero when any required check fails
 
@@ -190,13 +191,22 @@ Each job must be independent:
 Directory mode:
 
 - preserve relative structure
+- without flatten mode, fail on exact output-path collisions
+- with flatten mode, write outputs directly under the output root and fail if flattened output file names collide, including ASCII case-insensitive pairs such as `Song.aiff` and `song.aiff`
 
 Example:
 
-input/album/song.flac  
-→ output/album/song.aiff
+```text
+input/album/song.flac
+-> output/album/song.aiff
+```
 
-No flattening in v1.
+Flatten example:
+
+```text
+input/album/song.flac
+-> output/song.aiff
+```
 
 ---
 
@@ -231,7 +241,6 @@ Must not contain core logic.
 
 Future additions:
 
-- flatten mode
 - fail-fast mode
 - GUI (e.g. Tauri)
 

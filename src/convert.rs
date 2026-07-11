@@ -46,7 +46,6 @@ fn execute_with_runner(
     interrupt: &InterruptFlag,
 ) -> ExecutionReport {
     let configured_jobs = config.jobs;
-    let overwrite = config.overwrite;
     let dry_run = config.dry_run;
 
     if jobs.is_empty() {
@@ -71,7 +70,7 @@ fn execute_with_runner(
                 let result = if interrupt.is_interrupted() {
                     JobResult::Interrupted { input: job.input }
                 } else {
-                    execute_job(job, overwrite, dry_run, runner)
+                    execute_job(job, dry_run, runner)
                 };
                 reporter.finish_job();
                 result
@@ -117,13 +116,8 @@ fn temp_output_path(output: &Path) -> PathBuf {
     output.with_file_name(temp_file_name)
 }
 
-fn execute_job(
-    job: ConversionJob,
-    overwrite: bool,
-    dry_run: bool,
-    runner: FfmpegRunner,
-) -> JobResult {
-    if job.output.exists() && !overwrite {
+fn execute_job(job: ConversionJob, dry_run: bool, runner: FfmpegRunner) -> JobResult {
+    if job.output.exists() {
         return JobResult::Skipped;
     }
 
@@ -203,13 +197,13 @@ mod tests {
         dir
     }
 
-    fn test_config(dry_run: bool, overwrite: bool) -> Config {
+    fn test_config(dry_run: bool) -> Config {
         Config {
             input_path: PathBuf::from("ignored"),
             output_dir: None,
-            overwrite,
             dry_run,
             recursive: false,
+            flatten: false,
             jobs: 1,
             target_format: AudioFormat::Aiff,
         }
@@ -269,7 +263,7 @@ mod tests {
         fs::write(&input, b"").expect("create input");
         fs::write(&output, b"").expect("create output");
 
-        let config = test_config(false, false);
+        let config = test_config(false);
         let report = execute_with_runner(
             &config,
             vec![ConversionJob {
@@ -290,33 +284,6 @@ mod tests {
     }
 
     #[test]
-    fn execute_converts_existing_output_when_overwrite_is_enabled() {
-        let dir = test_dir("overwrite-existing");
-        let input = dir.join("song.flac");
-        let output = dir.join("song.aiff");
-        fs::write(&input, b"").expect("create input");
-        fs::write(&output, b"").expect("create output");
-
-        let config = test_config(false, true);
-        let report = execute_with_runner(
-            &config,
-            vec![ConversionJob {
-                input: input.clone(),
-                output,
-                source_format: AudioFormat::Flac,
-                target_format: AudioFormat::Aiff,
-            }],
-            runner_ok,
-            &interrupt_flag(),
-        );
-
-        assert_eq!(report.results.len(), 1);
-        assert!(matches!(report.results[0], JobResult::Converted));
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
     fn execute_dry_run_marks_converted_without_calling_runner() {
         fn panic_runner(_: &ConversionJob, _: &Path) -> Result<()> {
             panic!("runner should not be called during dry-run");
@@ -327,7 +294,7 @@ mod tests {
         let output = dir.join("song.aiff");
         fs::write(&input, b"").expect("create input");
 
-        let config = test_config(true, false);
+        let config = test_config(true);
         let report = execute_with_runner(
             &config,
             vec![ConversionJob {
@@ -353,7 +320,7 @@ mod tests {
         let output = dir.join("nested/song.aiff");
         fs::write(&input, b"").expect("create input");
 
-        let config = test_config(false, false);
+        let config = test_config(false);
         let report = execute_with_runner(
             &config,
             vec![ConversionJob {
@@ -394,7 +361,7 @@ mod tests {
 
         MKDIR_FAIL_RUNNER_CALLED.store(false, std::sync::atomic::Ordering::Relaxed);
 
-        let config = test_config(false, false);
+        let config = test_config(false);
         let report = execute_with_runner(
             &config,
             vec![ConversionJob {
@@ -446,7 +413,7 @@ mod tests {
         let output = dir.join("song.aiff");
         fs::write(&input, b"").expect("create input");
 
-        let config = test_config(false, false);
+        let config = test_config(false);
         let report = execute_with_runner(
             &config,
             vec![ConversionJob {
@@ -473,7 +440,7 @@ mod tests {
         let output = dir.join("song.aiff");
         fs::write(&input, b"").expect("create input");
 
-        let config = test_config(false, false);
+        let config = test_config(false);
         let report = execute_with_runner(
             &config,
             vec![ConversionJob {
@@ -494,34 +461,6 @@ mod tests {
     }
 
     #[test]
-    fn failed_overwrite_preserves_existing_final_output() {
-        let dir = test_dir("temp-overwrite-preserve");
-        let input = dir.join("song.flac");
-        let output = dir.join("song.aiff");
-        fs::write(&input, b"").expect("create input");
-        fs::write(&output, b"old").expect("create existing output");
-
-        let config = test_config(false, true);
-        let report = execute_with_runner(
-            &config,
-            vec![ConversionJob {
-                input,
-                output: output.clone(),
-                source_format: AudioFormat::Flac,
-                target_format: AudioFormat::Aiff,
-            }],
-            runner_write_partial_then_fail,
-            &interrupt_flag(),
-        );
-
-        assert!(matches!(report.results[0], JobResult::Failed { .. }));
-        assert_eq!(fs::read(&output).expect("read final output"), b"old");
-        assert!(temp_files_in(&dir).is_empty());
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
     fn interrupted_execution_does_not_call_runner() {
         fn panic_runner(_: &ConversionJob, _: &Path) -> Result<()> {
             panic!("runner should not be called after interrupt");
@@ -534,7 +473,7 @@ mod tests {
         let interrupt = interrupt_flag();
         interrupt.interrupt();
 
-        let config = test_config(false, false);
+        let config = test_config(false);
         let report = execute_with_runner(
             &config,
             vec![ConversionJob {
@@ -582,7 +521,7 @@ mod tests {
             interrupter_interrupt.interrupt();
         });
 
-        let mut config = test_config(false, false);
+        let mut config = test_config(false);
         config.jobs = 1;
         let report = execute_with_runner(&config, jobs, runner_slow_ok, &interrupt);
 
@@ -616,7 +555,7 @@ mod tests {
         let output = dir.join("song.aiff");
         fs::write(&input, b"").expect("create input");
 
-        let config = test_config(false, false);
+        let config = test_config(false);
         let report = execute_with_runner(
             &config,
             vec![ConversionJob {
@@ -637,7 +576,7 @@ mod tests {
 
     #[test]
     fn execute_reports_zero_workers_for_empty_job_list() {
-        let config = test_config(true, false);
+        let config = test_config(true);
         let report = execute_with_runner(&config, Vec::new(), runner_ok, &interrupt_flag());
 
         assert_eq!(report.results.len(), 0);
@@ -646,7 +585,7 @@ mod tests {
 
     #[test]
     fn execute_reports_actual_workers_used() {
-        let mut config = test_config(true, false);
+        let mut config = test_config(true);
         config.jobs = 8;
 
         let report = execute_with_runner(
