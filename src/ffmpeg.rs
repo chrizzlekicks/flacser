@@ -10,7 +10,7 @@ use crate::plan::ConversionJob;
 use crate::{audio_format::AudioFormat, config::Config};
 
 const FFMPEG_NOT_FOUND: &str = "ffmpeg not found.\n\nInstall it with:\n  Arch:   sudo pacman -S ffmpeg\n  Ubuntu: sudo apt install ffmpeg\n  macOS:  brew install ffmpeg";
-const FFPROBE_NOT_FOUND: &str = "ffprobe not found.\n\nInstall it with:\n  Arch:   sudo pacman -S ffmpeg\n  Ubuntu: sudo apt install ffmpeg\n  macOS:  brew install ffmpeg";
+pub const FFPROBE_NOT_FOUND: &str = "ffprobe not found.\n\nInstall it with:\n  Arch:   sudo pacman -S ffmpeg\n  Ubuntu: sudo apt install ffmpeg\n  macOS:  brew install ffmpeg";
 
 #[derive(Debug, Clone)]
 pub struct VersionProbe {
@@ -22,22 +22,6 @@ pub fn check_availability() -> Result<()> {
     match read_version() {
         Ok(_) => Ok(()),
         Err(_) => bail!(FFMPEG_NOT_FOUND),
-    }
-}
-
-pub fn check_probe_availability() -> Result<()> {
-    let status = run_ffprobe_candidate(|candidate| {
-        Command::new(candidate)
-            .arg("-version")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-    });
-
-    match status {
-        Ok(status) if status.success() => Ok(()),
-        _ => bail!(FFPROBE_NOT_FOUND),
     }
 }
 

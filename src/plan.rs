@@ -97,7 +97,7 @@ pub(crate) fn planned_output_path(
             root.join(relative)
         };
 
-        output.set_extension(target_format.canonical_extension());
+        output.set_extension(target_format.as_str());
         Ok(output)
     } else {
         let file_name = input
@@ -105,7 +105,7 @@ pub(crate) fn planned_output_path(
             .with_context(|| format!("input file has no file name: {}", input.display()))?;
 
         let mut output_file_name = PathBuf::from(file_name);
-        output_file_name.set_extension(target_format.canonical_extension());
+        output_file_name.set_extension(target_format.as_str());
 
         let root = output_dir.unwrap_or_else(|| input.parent().unwrap_or(Path::new(".")));
         Ok(root.join(output_file_name))

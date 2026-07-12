@@ -18,32 +18,28 @@ impl AudioFormat {
         }
     }
 
-    pub fn canonical_extension(self) -> &'static str {
-        self.as_str()
-    }
-
     pub fn from_path(path: &Path) -> Option<Self> {
         path.extension()
             .and_then(|extension| extension.to_str())
-            .and_then(Self::from_extension)
-    }
-
-    pub fn from_extension(extension: &str) -> Option<Self> {
-        if extension.eq_ignore_ascii_case("flac") {
-            Some(Self::Flac)
-        } else if extension.eq_ignore_ascii_case("aiff") || extension.eq_ignore_ascii_case("aif") {
-            Some(Self::Aiff)
-        } else if extension.eq_ignore_ascii_case("wav") {
-            Some(Self::Wav)
-        } else {
-            None
-        }
+            .and_then(|extension| {
+                if extension.eq_ignore_ascii_case("flac") {
+                    Some(Self::Flac)
+                } else if extension.eq_ignore_ascii_case("aiff")
+                    || extension.eq_ignore_ascii_case("aif")
+                {
+                    Some(Self::Aiff)
+                } else if extension.eq_ignore_ascii_case("wav") {
+                    Some(Self::Wav)
+                } else {
+                    None
+                }
+            })
     }
 }
 
 impl fmt::Display for AudioFormat {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.canonical_extension())
+        formatter.write_str(self.as_str())
     }
 }
 
@@ -90,13 +86,6 @@ mod tests {
             AudioFormat::from_path(Path::new("song.WAV")),
             Some(AudioFormat::Wav)
         );
-    }
-
-    #[test]
-    fn exposes_canonical_extensions() {
-        assert_eq!(AudioFormat::Flac.canonical_extension(), "flac");
-        assert_eq!(AudioFormat::Aiff.canonical_extension(), "aiff");
-        assert_eq!(AudioFormat::Wav.canonical_extension(), "wav");
     }
 
     #[test]
