@@ -1425,6 +1425,8 @@ fn convert_directory_flattens_output_with_flatten() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input_dir)
+        .arg("--to")
+        .arg("aiff")
         .arg("--recursive")
         .arg("--flatten")
         .arg("--output-dir")
@@ -1458,6 +1460,8 @@ fn convert_flatten_fails_on_basename_collision() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input_dir)
+        .arg("--to")
+        .arg("aiff")
         .arg("--recursive")
         .arg("--flatten")
         .arg("--dry-run")
@@ -1491,10 +1495,14 @@ fn doctor_directory_with_only_nested_flacs_succeeds() {
         .arg("doctor")
         .arg(tmp.path())
         .env("PATH", path)
+        .arg("--to")
+        .arg("aiff")
         .assert()
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("[ok] discoverable files: 1 .flac file(s) found"));
+    assert!(stdout.contains(
+        "[ok] discoverable files: 1 supported audio file(s) found with non-recursive discovery"
+    ));
     assert!(stdout.contains("Ready: yes"));
 }

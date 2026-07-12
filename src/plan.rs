@@ -17,9 +17,10 @@ pub struct ConversionJob {
 }
 
 pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>> {
-    let original_input = config.input_path.as_path();
+    let original_input_path = config.input_path.as_path();
     let output_dir = config.output_dir.as_deref();
     let target_format = config.target_format;
+    let flatten = config.flatten;
     validate_output_dir(output_dir)?;
 
     let jobs = inputs
@@ -36,7 +37,7 @@ pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>>
             }
 
             let output =
-                planned_output_path(original_input, &input, output_dir, target_format)?;
+                planned_output_path(original_input_path, &input, output_dir, target_format, flatten)?;
 
             Ok(ConversionJob {
                 input,
@@ -48,7 +49,7 @@ pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>>
         .collect::<Result<Vec<_>>>()?;
 
     detect_output_collisions(&jobs, config.flatten)?;
-  
+
     Ok(jobs)
 }
 
@@ -73,20 +74,29 @@ pub(crate) fn planned_output_path(
     input: &Path,
     output_dir: Option<&Path>,
     target_format: AudioFormat,
+    flatten: bool,
 ) -> Result<PathBuf> {
     let input_is_directory = original_input.is_dir();
 
     if input_is_directory {
-        let relative = input.strip_prefix(original_input).with_context(|| {
-            format!(
-                "could not derive relative path from {} against {}",
-                input.display(),
-                original_input.display()
-            )
-        })?;
-
         let root = output_dir.unwrap_or(original_input);
-        let mut output = root.join(relative);
+        let mut output = if flatten {
+            let file_name = input
+                .file_name()
+                .with_context(|| format!("input file has no file name: {}", input.display()))?;
+
+            root.join(file_name)
+        } else {
+            let relative = input.strip_prefix(original_input).with_context(|| {
+                format!(
+                    "could not derive relative path from {} against {}",
+                    input.display(),
+                    original_input.display()
+                )
+            })?;
+            root.join(relative)
+        };
+
         output.set_extension(target_format.canonical_extension());
         Ok(output)
     } else {
@@ -106,8 +116,8 @@ pub(crate) fn detect_output_collisions(jobs: &[ConversionJob], flatten: bool) ->
     if flatten {
         let mut seen: HashMap<Vec<u8>, &Path> = HashMap::new();
 
-        for (input, output) in jobs {
-            let mut collision_key = output_file_name_bytes(output.as_path())?;
+        for job in jobs {
+            let mut collision_key = output_file_name_bytes(job.output.as_path())?;
             collision_key.make_ascii_lowercase();
             #[expect(clippy::single_match, reason = "match pattern keeps bailing clear")]
             match seen.get(&collision_key) {
@@ -115,31 +125,31 @@ pub(crate) fn detect_output_collisions(jobs: &[ConversionJob], flatten: bool) ->
                     bail!(
                         "output collision detected: {} and {} both map to {}",
                         existing_input.display(),
-                        input.display(),
-                        output.display()
+                        job.input.display(),
+                        job.output.display()
                     );
                 }
                 None => {}
             }
-            seen.insert(collision_key, input.as_path());
+            seen.insert(collision_key, job.input.as_path());
         }
     } else {
         let mut seen: HashMap<&Path, &Path> = HashMap::new();
 
-        for (input, output) in jobs {
+        for job in jobs {
             #[expect(clippy::single_match, reason = "match pattern keeps bailing clear")]
-            match seen.get(output.as_path()) {
+            match seen.get(job.output.as_path()) {
                 Some(existing_input) => {
                     bail!(
                         "output collision detected: {} and {} both map to {}",
                         existing_input.display(),
-                        input.display(),
-                        output.display()
+                        job.input.display(),
+                        job.output.display()
                     );
                 }
                 None => {}
             }
-            seen.insert(output.as_path(), input.as_path());
+            seen.insert(job.output.as_path(), job.input.as_path());
         }
     }
 

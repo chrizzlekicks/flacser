@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use walkdir::WalkDir;
@@ -14,12 +14,12 @@ pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
     )
 }
 
-pub fn discover_for_doctor(input_path: &std::path::Path, recursive: bool) -> Result<Vec<PathBuf>> {
+pub fn discover_for_doctor(input_path: &Path, recursive: bool) -> Result<Vec<PathBuf>> {
     discover_with_excluded_target(input_path, recursive, None)
 }
 
 fn discover_with_excluded_target(
-    input_path: &std::path::Path,
+    input_path: &Path,
     recursive: bool,
     excluded_target: Option<AudioFormat>,
 ) -> Result<Vec<PathBuf>> {

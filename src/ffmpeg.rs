@@ -186,7 +186,7 @@ pub fn is_needed(config: &Config, jobs: &[ConversionJob]) -> bool {
 pub fn probe_is_needed(config: &Config, jobs: &[ConversionJob]) -> bool {
     !config.dry_run
         && jobs.iter().any(|job| {
-            (config.overwrite || !job.output.exists())
+            !job.output.exists()
                 && matches!(job.target_format, AudioFormat::Aiff | AudioFormat::Wav)
         })
 }

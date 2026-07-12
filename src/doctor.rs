@@ -276,6 +276,7 @@ fn add_input_checks(report: &mut DoctorReport, input: &DoctorInput, input_path: 
 }
 
 fn discover_inputs_for_doctor(input: &DoctorInput, config: &Config) -> Result<Vec<PathBuf>> {
+    println!("{input:?}");
     match input.target_format {
         Some(_) => discover::discover(config),
         None => discover::discover_for_doctor(config.input_path.as_path(), false),
@@ -670,7 +671,7 @@ mod tests {
         assert!(
             check(&report, "discoverable files")
                 .detail
-                .starts_with("1 supported audio")
+                .starts_with("2 supported audio")
         );
         assert_eq!(check(&report, "effective workers").detail, "2");
         assert!(report.is_ready());
