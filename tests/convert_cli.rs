@@ -12,22 +12,13 @@ use std::{
 use assert_cmd::Command;
 use tempfile::TempDir;
 
-use support::{FakeFfmpeg, install_fake_ffmpeg, install_fake_ffprobe, prepend_path};
+use support::{
+    FakeFfmpeg, ffprobe_path, install_fake_ffmpeg, install_fake_ffprobe, prepend_path, stderr_text,
+    stdout_text, write_file,
+};
 
 #[cfg(unix)]
 const INTERRUPT_FAKE_FFMPEG_START_TIMEOUT: Duration = Duration::from_secs(5);
-
-fn write_file(path: &Path) {
-    fs::write(path, b"").expect("write test file");
-}
-
-fn stdout_text(assert: &assert_cmd::assert::Assert) -> String {
-    String::from_utf8_lossy(&assert.get_output().stdout).to_string()
-}
-
-fn stderr_text(assert: &assert_cmd::assert::Assert) -> String {
-    String::from_utf8_lossy(&assert.get_output().stderr).to_string()
-}
 
 fn output_text(assert: &assert_cmd::assert::Assert) -> String {
     format!("{}{}", stdout_text(assert), stderr_text(assert))
@@ -1470,6 +1461,127 @@ fn convert_flatten_fails_on_basename_collision() {
 
     let stderr = stderr_text(&assert);
     assert!(stderr.contains("output collision detected"));
+}
+
+fn run_conversion_test(input_ext: &str, target: &str, expected_output_ext: &str) {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join(format!("song.{}", input_ext));
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: false,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg(target)
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("total=1"));
+    assert!(stdout.contains("converted=1"));
+    assert!(stdout.contains("failed=0"));
+    assert!(
+        tmp.path()
+            .join(format!("song.{}", expected_output_ext))
+            .exists()
+    );
+}
+
+#[test]
+fn convert_all_direction_combinations() {
+    // Test all 6 supported conversion directions
+    run_conversion_test("flac", "aiff", "aiff");
+    run_conversion_test("flac", "wav", "wav");
+    run_conversion_test("aiff", "flac", "flac");
+    run_conversion_test("aiff", "wav", "wav");
+    run_conversion_test("wav", "flac", "flac");
+    run_conversion_test("wav", "aiff", "aiff");
+    // Test .aif alias
+    run_conversion_test("aif", "flac", "flac");
+}
+
+#[test]
+fn convert_to_flac_does_not_call_ffprobe() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.wav");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: false,
+        },
+    );
+    // Remove ffprobe to ensure it's not called
+    let ffprobe = ffprobe_path(&bin_dir);
+    fs::remove_file(ffprobe).expect("remove fake ffprobe");
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("flac")
+        .env("PATH", prepend_path(&bin_dir))
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("total=1"));
+    assert!(stdout.contains("converted=1"));
+}
+
+#[test]
+fn convert_to_pcm_requires_ffprobe_and_fails_without_it() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: false,
+        },
+    );
+    // Remove ffprobe to ensure it's required
+    let ffprobe = ffprobe_path(&bin_dir);
+    fs::remove_file(ffprobe).expect("remove fake ffprobe");
+
+    // Use only the fake bin directory in PATH to avoid system ffprobe
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("aiff")
+        .env("PATH", &bin_dir)
+        .assert()
+        .failure();
+
+    let stderr = stderr_text(&assert);
+    let stdout = stdout_text(&assert);
+    assert!(!stdout.contains("Summary:"));
+    assert!(stderr.contains("ffprobe not found."));
+    assert!(stderr.contains("Install it with:"));
 }
 
 #[test]

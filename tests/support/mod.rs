@@ -1,5 +1,7 @@
 use std::{env, ffi::OsString, fs, path::Path};
 
+use assert_cmd::assert::Assert;
+
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
@@ -30,6 +32,30 @@ pub enum FakeFfmpeg<'a> {
         success_contents: &'a str,
         create_parent: bool,
     },
+}
+
+#[allow(dead_code)]
+pub fn write_file(path: &Path) {
+    fs::write(path, b"").expect("write test file");
+}
+
+#[allow(dead_code)]
+pub fn stdout_text(assert: &Assert) -> String {
+    String::from_utf8_lossy(&assert.get_output().stdout).to_string()
+}
+
+#[allow(dead_code)]
+pub fn stderr_text(assert: &Assert) -> String {
+    String::from_utf8_lossy(&assert.get_output().stderr).to_string()
+}
+
+#[allow(dead_code)]
+pub fn ffprobe_path(dir: &Path) -> std::path::PathBuf {
+    if cfg!(windows) {
+        dir.join("ffprobe.cmd")
+    } else {
+        dir.join("ffprobe")
+    }
 }
 
 pub fn prepend_path(bin_dir: &Path) -> OsString {

@@ -1,23 +1,13 @@
 mod support;
 
-use std::{fs, path::Path};
+use std::fs;
 
 use assert_cmd::Command;
 use tempfile::TempDir;
 
-use support::{FakeFfmpeg, install_fake_ffmpeg, prepend_path};
-
-fn write_file(path: &Path) {
-    fs::write(path, b"").expect("write test file");
-}
-
-fn stdout_text(assert: &assert_cmd::assert::Assert) -> String {
-    String::from_utf8_lossy(&assert.get_output().stdout).to_string()
-}
-
-fn stderr_text(assert: &assert_cmd::assert::Assert) -> String {
-    String::from_utf8_lossy(&assert.get_output().stderr).to_string()
-}
+use support::{
+    FakeFfmpeg, install_fake_ffmpeg, prepend_path, stderr_text, stdout_text, write_file,
+};
 
 #[test]
 fn summary_line_is_stable_for_dry_run_success() {
