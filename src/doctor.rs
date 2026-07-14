@@ -245,7 +245,7 @@ fn add_input_checks(report: &mut DoctorReport, input: &DoctorInput, input_path: 
     if inputs.is_empty() {
         report.push(DoctorCheck::failed(
             "discoverable files",
-            "0 supported audio files found with non-recursive discovery",
+            "0 supported audio files found",
         ));
         report.push(DoctorCheck::ok("effective workers", "0"));
         return;
@@ -253,10 +253,7 @@ fn add_input_checks(report: &mut DoctorReport, input: &DoctorInput, input_path: 
 
     report.push(DoctorCheck::ok(
         "discoverable files",
-        format!(
-            "{} supported audio file(s) found with non-recursive discovery",
-            inputs.len()
-        ),
+        format!("{} supported audio file(s) found", inputs.len()),
     ));
 
     let job_count = inputs.len();

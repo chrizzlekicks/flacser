@@ -605,9 +605,7 @@ fn doctor_directory_input_summarizes_planning_without_output_names() {
 
     let stdout = stdout_text(&assert);
     assert!(stdout.contains("[ok] input type: directory"));
-    assert!(stdout.contains(
-        "[ok] discoverable files: 2 supported audio file(s) found with non-recursive discovery"
-    ));
+    assert!(stdout.contains("[ok] discoverable files: 2 supported audio file(s) found"));
     assert!(stdout.contains("[ok] output planning: 2 output path(s) validated"));
     assert!(!stdout.contains("first.aiff"));
     assert!(!stdout.contains("second.aiff"));
@@ -1613,8 +1611,6 @@ fn doctor_directory_with_only_nested_flacs_succeeds() {
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains(
-        "[ok] discoverable files: 1 supported audio file(s) found with non-recursive discovery"
-    ));
+    assert!(stdout.contains("[ok] discoverable files: 1 supported audio file(s) found"));
     assert!(stdout.contains("Ready: yes"));
 }
