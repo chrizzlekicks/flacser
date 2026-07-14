@@ -12,22 +12,13 @@ use std::{
 use assert_cmd::Command;
 use tempfile::TempDir;
 
-use support::{FakeFfmpeg, install_fake_ffmpeg, prepend_path};
+use support::{
+    FakeFfmpeg, ffprobe_path, install_fake_ffmpeg, install_fake_ffprobe, prepend_path, stderr_text,
+    stdout_text, write_file,
+};
 
 #[cfg(unix)]
 const INTERRUPT_FAKE_FFMPEG_START_TIMEOUT: Duration = Duration::from_secs(5);
-
-fn write_file(path: &Path) {
-    fs::write(path, b"").expect("write test file");
-}
-
-fn stdout_text(assert: &assert_cmd::assert::Assert) -> String {
-    String::from_utf8_lossy(&assert.get_output().stdout).to_string()
-}
-
-fn stderr_text(assert: &assert_cmd::assert::Assert) -> String {
-    String::from_utf8_lossy(&assert.get_output().stderr).to_string()
-}
 
 fn output_text(assert: &assert_cmd::assert::Assert) -> String {
     format!("{}{}", stdout_text(assert), stderr_text(assert))
@@ -58,6 +49,18 @@ fn install_interrupt_fake_ffmpeg(dir: &Path, marker: &Path) {
         .permissions();
     perms.set_mode(0o755);
     fs::set_permissions(&ffmpeg_path, perms).expect("chmod fake ffmpeg");
+
+    let ffprobe_path = dir.join("ffprobe");
+    fs::write(
+        &ffprobe_path,
+        "#!/bin/sh\nif [ \"${1:-}\" = \"-version\" ]; then\n  printf '%s\\n' 'ffprobe version test'\n  exit 0\nfi\nprintf '%s\\n' 'sample_fmt=s16'\nprintf '%s\\n' 'bits_per_sample=16'\nprintf '%s\\n' 'bits_per_raw_sample=N/A'\nexit 0\n",
+    )
+    .expect("write fake ffprobe");
+    let mut perms = fs::metadata(&ffprobe_path)
+        .expect("stat fake ffprobe")
+        .permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&ffprobe_path, perms).expect("chmod fake ffprobe");
 }
 
 #[test]
@@ -69,6 +72,8 @@ fn convert_missing_path_exits_non_zero() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&missing)
+        .arg("--to")
+        .arg("aiff")
         .assert()
         .failure();
 }
@@ -85,6 +90,8 @@ fn convert_single_file_dry_run_succeeds_without_ffmpeg() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .env("PATH", &bin_dir)
         .assert()
@@ -109,6 +116,8 @@ fn convert_missing_ffmpeg_exits_non_zero_with_install_instructions() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .env("PATH", &bin_dir)
         .assert()
         .failure();
@@ -121,6 +130,260 @@ fn convert_missing_ffmpeg_exits_non_zero_with_install_instructions() {
     assert!(stderr.contains("Arch:   sudo pacman -S ffmpeg"));
     assert!(stderr.contains("Ubuntu: sudo apt install ffmpeg"));
     assert!(stderr.contains("macOS:  brew install ffmpeg"));
+}
+
+#[test]
+fn convert_missing_ffprobe_for_pcm_target_exits_non_zero_with_install_instructions() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: false,
+        },
+    );
+    let ffprobe = if cfg!(windows) {
+        bin_dir.join("ffprobe.cmd")
+    } else {
+        bin_dir.join("ffprobe")
+    };
+    fs::remove_file(ffprobe).expect("remove fake ffprobe");
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("aiff")
+        .env("PATH", &bin_dir)
+        .assert()
+        .failure();
+
+    let stdout = stdout_text(&assert);
+    let stderr = stderr_text(&assert);
+    assert!(!stdout.contains("Summary:"));
+    assert!(stderr.contains("ffprobe not found."));
+    assert!(stderr.contains("Install it with:"));
+}
+
+#[test]
+fn convert_without_target_exits_non_zero_with_clear_error() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    write_file(&input);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .env_remove("FLACSER_CONVERT_TO")
+        .assert()
+        .failure();
+
+    let stderr = stderr_text(&assert);
+    assert!(stderr.contains("target format is required"));
+    assert!(stderr.contains("--to <format>"));
+    assert!(stderr.contains("FLACSER_CONVERT_TO"));
+}
+
+#[test]
+fn convert_rejects_invalid_cli_target() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    write_file(&input);
+
+    for target in ["mp3", "aif"] {
+        let assert = Command::cargo_bin("flacser")
+            .expect("build flacser binary")
+            .arg("convert")
+            .arg(&input)
+            .arg("--to")
+            .arg(target)
+            .assert()
+            .failure();
+
+        let stderr = stderr_text(&assert);
+        assert!(stderr.contains("invalid value"));
+        assert!(stderr.contains("--to <TO>"));
+        assert!(stderr.contains("possible values: flac, aiff, wav"));
+    }
+}
+
+#[test]
+fn convert_accepts_aif_input() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.aif");
+    write_file(&input);
+
+    Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("wav")
+        .arg("--dry-run")
+        .assert()
+        .success();
+}
+
+#[test]
+fn convert_uses_env_target_fallback() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: false,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .env("FLACSER_CONVERT_TO", "wav")
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("song.wav").exists());
+}
+
+#[test]
+fn convert_wav_uses_probe_bit_depth_for_pcm_codec() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteArgs {
+            create_parent: false,
+        },
+    );
+    install_fake_ffprobe(
+        &bin_dir,
+        "sample_fmt=s32\nbits_per_sample=32\nbits_per_raw_sample=24\n",
+    );
+
+    Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("wav")
+        .env("PATH", prepend_path(&bin_dir))
+        .assert()
+        .success();
+
+    let output = fs::read_to_string(tmp.path().join("song.wav")).expect("read fake output");
+    assert!(output.contains("-c:a pcm_s24le"));
+}
+
+#[test]
+fn convert_rejects_invalid_env_target() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    write_file(&input);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .env("FLACSER_CONVERT_TO", "mp3")
+        .assert()
+        .failure();
+
+    let stderr = stderr_text(&assert);
+    assert!(stderr.contains("invalid value"));
+    assert!(stderr.contains("--to <TO>"));
+    assert!(stderr.contains("possible values: flac, aiff, wav"));
+}
+
+#[test]
+fn convert_cli_target_takes_precedence_over_env_target() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: false,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("aiff")
+        .env("FLACSER_CONVERT_TO", "wav")
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("song.aiff").exists());
+    assert!(!tmp.path().join("song.wav").exists());
+}
+
+#[test]
+fn convert_directory_skips_existing_target_format_inputs_during_discovery() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input_dir = tmp.path().join("input");
+    fs::create_dir_all(&input_dir).expect("create input dir");
+    write_file(&input_dir.join("song.flac"));
+    write_file(&input_dir.join("song.aiff"));
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input_dir)
+        .arg("--to")
+        .arg("aiff")
+        .arg("--dry-run")
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("total=1"));
+    assert!(stdout.contains("failed=0"));
+    assert!(!stdout.contains("same-format conversion is not supported"));
+}
+
+#[test]
+fn convert_rejects_same_format_conversion() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.wav");
+    write_file(&input);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("wav")
+        .assert()
+        .failure();
+
+    let stderr = stderr_text(&assert);
+    assert!(stderr.contains("same-format conversion is not supported"));
 }
 
 #[test]
@@ -148,7 +411,7 @@ fn flacser_help_shows_basic_contract() {
     assert_usage(&stdout, "<COMMAND>");
     assert!(stdout.contains("convert"));
     assert!(stdout.contains("doctor"));
-    assert!(stdout.contains("Convert .flac file or directory with multiple .flac files to .aiff"));
+    assert!(stdout.contains("Convert FLAC, AIFF, or WAV files to a target lossless format"));
     assert!(stdout.contains("Check whether the system is ready to run conversions"));
     assert!(stdout.contains("help"));
     assert!(stdout.contains("Print this message or the help of the given subcommand(s)"));
@@ -170,6 +433,7 @@ fn doctor_help_shows_expected_contract() {
     let stdout = stdout_text(&assert);
     assert_usage(&stdout, "doctor [OPTIONS] [INPUT_PATH]");
     assert!(stdout.contains("Optional input path to diagnose before conversion"));
+    assert!(stdout.contains("--to <TO>"));
     assert!(stdout.contains("-o, --output-dir <OUTPUT_DIR>"));
     assert!(stdout.contains("-j, --jobs <JOBS>"));
 }
@@ -199,6 +463,8 @@ fn doctor_succeeds_when_global_checks_pass() {
     assert!(stdout.contains("Doctor report:"));
     assert!(stdout.contains("[ok] ffmpeg: found"));
     assert!(stdout.contains("[ok] ffmpeg version: ffmpeg version 7.1-test"));
+    assert!(stdout.contains("[ok] ffprobe: found"));
+    assert!(stdout.contains("[ok] ffprobe version: ffprobe version test"));
     assert!(stdout.contains("[ok] cpu cores:"));
     assert!(stdout.contains("[ok] default workers:"));
     assert!(stdout.contains("[ok] config sanity: global defaults are sane"));
@@ -257,6 +523,8 @@ fn doctor_file_input_with_jobs_succeeds_with_fake_ffmpeg() {
         .expect("build flacser binary")
         .arg("doctor")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--jobs")
         .arg("1")
         .env("PATH", path)
@@ -265,9 +533,8 @@ fn doctor_file_input_with_jobs_succeeds_with_fake_ffmpeg() {
 
     let stdout = stdout_text(&assert);
     assert!(stdout.contains("[ok] input type: file"));
-    assert!(stdout.contains("[ok] discoverable files: 1 .flac file(s) found"));
-    assert!(stdout.contains("[ok] output planning: 1 output path(s) validated"));
-    assert!(!stdout.contains("song.aiff"));
+    assert!(stdout.contains("[ok] discoverable files: 1 supported audio file(s) found"));
+    assert!(stdout.contains("[ok] output planning:"));
     assert!(stdout.contains("[ok] effective workers: 1"));
     assert!(stdout.contains("Ready: yes"));
 }
@@ -293,6 +560,8 @@ fn doctor_file_input_with_output_dir_succeeds_with_fake_ffmpeg() {
         .expect("build flacser binary")
         .arg("doctor")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&out_dir)
         .env("PATH", path)
@@ -328,18 +597,85 @@ fn doctor_directory_input_summarizes_planning_without_output_names() {
         .expect("build flacser binary")
         .arg("doctor")
         .arg(tmp.path())
+        .arg("--to")
+        .arg("aiff")
         .env("PATH", path)
         .assert()
         .success();
 
     let stdout = stdout_text(&assert);
     assert!(stdout.contains("[ok] input type: directory"));
-    assert!(stdout.contains("[ok] discoverable files: 2 .flac file(s) found"));
+    assert!(stdout.contains("[ok] discoverable files: 2 supported audio file(s) found"));
     assert!(stdout.contains("[ok] output planning: 2 output path(s) validated"));
     assert!(!stdout.contains("first.aiff"));
     assert!(!stdout.contains("second.aiff"));
     assert!(stdout.contains("[ok] effective workers: 2"));
     assert!(stdout.contains("Ready: yes"));
+}
+
+#[test]
+fn doctor_directory_reports_convert_target_output_collision() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&tmp.path().join("song.flac"));
+    write_file(&tmp.path().join("song.wav"));
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg(tmp.path())
+        .arg("--to")
+        .arg("aiff")
+        .env("PATH", path)
+        .assert()
+        .failure();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[fail] output planning: output collision detected"));
+    assert!(stdout.contains("song.flac"));
+    assert!(stdout.contains("song.wav"));
+    assert!(stdout.contains("song.aiff"));
+    assert!(stdout.contains("Ready: no"));
+}
+
+#[test]
+fn doctor_input_without_target_fails_output_planning() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .arg(&input)
+        .env("PATH", path)
+        .assert()
+        .failure();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[ok] input type: file"));
+    assert!(stdout.contains("[fail] output planning: target format is required"));
+    assert!(stdout.contains("FLACSER_CONVERT_TO"));
+    assert!(stdout.contains("Ready: no"));
 }
 
 #[test]
@@ -395,7 +731,7 @@ fn doctor_empty_directory_exits_non_zero() {
         .failure();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("[fail] discoverable files: 0 .flac files found"));
+    assert!(stdout.contains("[fail] discoverable files: 0 supported audio files found"));
     assert!(stdout.contains("Ready: no"));
 }
 
@@ -449,6 +785,8 @@ fn doctor_output_path_file_exits_non_zero() {
         .expect("build flacser binary")
         .arg("doctor")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&output_as_file)
         .env("PATH", path)
@@ -478,6 +816,40 @@ fn doctor_fails_when_ffmpeg_is_missing() {
     assert!(stdout.contains("[fail] ffmpeg version:"));
     assert!(stdout.contains("[ok] cpu cores:"));
     assert!(stdout.contains("[ok] default workers:"));
+    assert!(stdout.contains("Ready: no"));
+}
+
+#[test]
+fn doctor_fails_when_ffprobe_is_missing() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let bin_dir = tmp.path().join("bin");
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::VersionOnlySuccess {
+            version_line: "ffmpeg version test",
+            extra_version_output: &[],
+            non_version_exit: 9,
+        },
+    );
+    let ffprobe = if cfg!(windows) {
+        bin_dir.join("ffprobe.cmd")
+    } else {
+        bin_dir.join("ffprobe")
+    };
+    fs::remove_file(ffprobe).expect("remove fake ffprobe");
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("doctor")
+        .env("PATH", &bin_dir)
+        .assert()
+        .failure();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("[ok] ffmpeg: found"));
+    assert!(stdout.contains("[ok] ffmpeg version: ffmpeg version test"));
+    assert!(stdout.contains("[fail] ffprobe: not found"));
+    assert!(stdout.contains("[fail] ffprobe version:"));
     assert!(stdout.contains("Ready: no"));
 }
 
@@ -519,9 +891,11 @@ fn convert_help_shows_expected_contract() {
 
     let stdout = stdout_text(&assert);
     assert_usage(&stdout, "convert [OPTIONS] <INPUT_PATH>");
-    assert!(stdout.contains("Input `.flac` file or directory to convert"));
+    assert!(stdout.contains("Input audio file or directory to convert"));
+    assert!(stdout.contains("--to <TO>"));
+    assert!(stdout.contains("Target format: flac, aiff, or wav"));
     assert!(stdout.contains("-o, --output-dir <OUTPUT_DIR>"));
-    assert!(stdout.contains("Write converted `.aiff` files into this directory"));
+    assert!(stdout.contains("Write converted files into this directory"));
     assert!(stdout.contains("-n, --dry-run"));
     assert!(stdout.contains("Print the conversion plan without running `ffmpeg`"));
     assert!(stdout.contains("-r, --recursive"));
@@ -542,6 +916,8 @@ fn convert_rejects_zero_jobs() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--jobs")
         .arg("0")
         .assert()
@@ -552,20 +928,22 @@ fn convert_rejects_zero_jobs() {
 }
 
 #[test]
-fn convert_non_flac_input_file_exits_non_zero_with_clear_error() {
+fn convert_unsupported_input_file_exits_non_zero_with_clear_error() {
     let tmp = TempDir::new().expect("create temp dir");
-    let input = tmp.path().join("song.wav");
+    let input = tmp.path().join("song.mp3");
     write_file(&input);
 
     let assert = Command::cargo_bin("flacser")
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .assert()
         .failure();
 
     let stderr = stderr_text(&assert);
-    assert!(stderr.contains("input file is not a .flac file"));
+    assert!(stderr.contains("input file is not a supported audio file"));
 }
 
 #[test]
@@ -583,6 +961,8 @@ fn convert_directory_is_non_recursive_by_default() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(root)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .assert()
         .success();
@@ -608,6 +988,8 @@ fn convert_directory_recurses_when_recursive_is_enabled() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(root)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .arg("--recursive")
         .assert()
@@ -636,6 +1018,8 @@ fn convert_directory_recurses_when_recursive_short_flag_is_enabled() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(root)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .arg("-r")
         .assert()
@@ -659,6 +1043,8 @@ fn convert_accepts_jobs_short_flag() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .arg("-j")
         .arg("1")
@@ -683,6 +1069,8 @@ fn convert_directory_supports_case_insensitive_flac_extension() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(root)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .assert()
         .success();
@@ -701,6 +1089,8 @@ fn convert_empty_directory_succeeds_with_zero_summary() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(tmp.path())
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .assert()
         .success();
@@ -724,6 +1114,8 @@ fn convert_skips_existing_output() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .assert()
         .success();
@@ -748,6 +1140,8 @@ fn convert_invalid_output_dir_path_exits_non_zero() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&output_as_file)
         .assert()
@@ -780,6 +1174,8 @@ fn convert_single_file_writes_to_output_dir_with_mocked_ffmpeg() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&out_dir)
         .env("PATH", path)
@@ -818,6 +1214,8 @@ fn convert_handles_paths_with_spaces() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&output_dir)
         .env("PATH", path)
@@ -845,6 +1243,8 @@ fn convert_returns_non_zero_when_ffmpeg_fails() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .env("PATH", new_path)
         .assert()
         .failure();
@@ -871,6 +1271,8 @@ fn convert_interrupt_exits_130_and_removes_partial_temp_output() {
     let mut child = StdCommand::new(assert_cmd::cargo::cargo_bin("flacser"))
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .env("PATH", path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -949,6 +1351,8 @@ fn convert_continues_after_failure_and_reports_partial_batch_failure() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input_dir)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&output_dir)
         .arg("--jobs")
@@ -1010,6 +1414,8 @@ fn convert_directory_flattens_output_with_flatten() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input_dir)
+        .arg("--to")
+        .arg("aiff")
         .arg("--recursive")
         .arg("--flatten")
         .arg("--output-dir")
@@ -1043,6 +1449,8 @@ fn convert_flatten_fails_on_basename_collision() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input_dir)
+        .arg("--to")
+        .arg("aiff")
         .arg("--recursive")
         .arg("--flatten")
         .arg("--dry-run")
@@ -1051,6 +1459,127 @@ fn convert_flatten_fails_on_basename_collision() {
 
     let stderr = stderr_text(&assert);
     assert!(stderr.contains("output collision detected"));
+}
+
+fn run_conversion_test(input_ext: &str, target: &str, expected_output_ext: &str) {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join(format!("song.{}", input_ext));
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: false,
+        },
+    );
+    let path = prepend_path(&bin_dir);
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg(target)
+        .env("PATH", path)
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("total=1"));
+    assert!(stdout.contains("converted=1"));
+    assert!(stdout.contains("failed=0"));
+    assert!(
+        tmp.path()
+            .join(format!("song.{}", expected_output_ext))
+            .exists()
+    );
+}
+
+#[test]
+fn convert_all_direction_combinations() {
+    // Test all 6 supported conversion directions
+    run_conversion_test("flac", "aiff", "aiff");
+    run_conversion_test("flac", "wav", "wav");
+    run_conversion_test("aiff", "flac", "flac");
+    run_conversion_test("aiff", "wav", "wav");
+    run_conversion_test("wav", "flac", "flac");
+    run_conversion_test("wav", "aiff", "aiff");
+    // Test .aif alias
+    run_conversion_test("aif", "flac", "flac");
+}
+
+#[test]
+fn convert_to_flac_does_not_call_ffprobe() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.wav");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: false,
+        },
+    );
+    // Remove ffprobe to ensure it's not called
+    let ffprobe = ffprobe_path(&bin_dir);
+    fs::remove_file(ffprobe).expect("remove fake ffprobe");
+
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("flac")
+        .env("PATH", prepend_path(&bin_dir))
+        .assert()
+        .success();
+
+    let stdout = stdout_text(&assert);
+    assert!(stdout.contains("total=1"));
+    assert!(stdout.contains("converted=1"));
+}
+
+#[test]
+fn convert_to_pcm_requires_ffprobe_and_fails_without_it() {
+    let tmp = TempDir::new().expect("create temp dir");
+    let input = tmp.path().join("song.flac");
+    let bin_dir = tmp.path().join("bin");
+    write_file(&input);
+    fs::create_dir_all(&bin_dir).expect("create bin dir");
+
+    install_fake_ffmpeg(
+        &bin_dir,
+        FakeFfmpeg::WriteOutput {
+            contents: "",
+            create_parent: false,
+        },
+    );
+    // Remove ffprobe to ensure it's required
+    let ffprobe = ffprobe_path(&bin_dir);
+    fs::remove_file(ffprobe).expect("remove fake ffprobe");
+
+    // Use only the fake bin directory in PATH to avoid system ffprobe
+    let assert = Command::cargo_bin("flacser")
+        .expect("build flacser binary")
+        .arg("convert")
+        .arg(&input)
+        .arg("--to")
+        .arg("aiff")
+        .env("PATH", &bin_dir)
+        .assert()
+        .failure();
+
+    let stderr = stderr_text(&assert);
+    let stdout = stdout_text(&assert);
+    assert!(!stdout.contains("Summary:"));
+    assert!(stderr.contains("ffprobe not found."));
+    assert!(stderr.contains("Install it with:"));
 }
 
 #[test]
@@ -1076,10 +1605,12 @@ fn doctor_directory_with_only_nested_flacs_succeeds() {
         .arg("doctor")
         .arg(tmp.path())
         .env("PATH", path)
+        .arg("--to")
+        .arg("aiff")
         .assert()
         .success();
 
     let stdout = stdout_text(&assert);
-    assert!(stdout.contains("[ok] discoverable files: 1 .flac file(s) found"));
+    assert!(stdout.contains("[ok] discoverable files: 1 supported audio file(s) found"));
     assert!(stdout.contains("Ready: yes"));
 }

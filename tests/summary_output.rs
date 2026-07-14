@@ -1,23 +1,13 @@
 mod support;
 
-use std::{fs, path::Path};
+use std::fs;
 
 use assert_cmd::Command;
 use tempfile::TempDir;
 
-use support::{FakeFfmpeg, install_fake_ffmpeg, prepend_path};
-
-fn write_file(path: &Path) {
-    fs::write(path, b"").expect("write test file");
-}
-
-fn stdout_text(assert: &assert_cmd::assert::Assert) -> String {
-    String::from_utf8_lossy(&assert.get_output().stdout).to_string()
-}
-
-fn stderr_text(assert: &assert_cmd::assert::Assert) -> String {
-    String::from_utf8_lossy(&assert.get_output().stderr).to_string()
-}
+use support::{
+    FakeFfmpeg, install_fake_ffmpeg, prepend_path, stderr_text, stdout_text, write_file,
+};
 
 #[test]
 fn summary_line_is_stable_for_dry_run_success() {
@@ -29,6 +19,8 @@ fn summary_line_is_stable_for_dry_run_success() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .assert()
         .success();
@@ -55,6 +47,8 @@ fn summary_line_is_stable_for_skip_case() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .assert()
         .success();
@@ -77,6 +71,8 @@ fn summary_reports_zero_workers_for_empty_input() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(tmp.path())
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .arg("--jobs")
         .arg("8")
@@ -105,6 +101,8 @@ fn summary_reports_actual_workers_used() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(tmp.path())
+        .arg("--to")
+        .arg("aiff")
         .arg("--dry-run")
         .arg("--jobs")
         .arg("8")
@@ -135,6 +133,8 @@ fn failure_prints_summary_to_stdout_and_details_to_stderr() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input)
+        .arg("--to")
+        .arg("aiff")
         .env("PATH", path)
         .assert()
         .failure();
@@ -180,6 +180,8 @@ fn partial_batch_failure_has_predictable_summary_counts() {
         .expect("build flacser binary")
         .arg("convert")
         .arg(&input_dir)
+        .arg("--to")
+        .arg("aiff")
         .arg("--output-dir")
         .arg(&output_dir)
         .arg("--jobs")

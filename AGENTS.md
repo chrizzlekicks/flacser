@@ -2,8 +2,8 @@
 
 ## Repo overview
 
-- `flacser` is a Rust CLI for converting `.flac` files to `.aiff` with `ffmpeg`.
-- Main commands are `convert` for batch conversion and `doctor` for read-only environment checks.
+- `flacser` is a Rust CLI for converting FLAC, AIFF, and WAV files between supported lossless formats with `ffmpeg`.
+- Main commands are `convert` for single-file or directory conversion and `doctor` for read-only environment checks.
 
 ## Repo structure
 

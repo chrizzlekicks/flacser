@@ -1,11 +1,13 @@
 use std::{num::NonZeroUsize, path::PathBuf};
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
+
+use crate::audio_format::AudioFormat;
 
 #[derive(Debug, Parser)]
 #[command(
     name = "flacser",
-    about = "Convert .flac files to .aiff with ffmpeg",
+    about = "Convert lossless audio files with ffmpeg",
     version
 )]
 pub struct Cli {
@@ -15,19 +17,23 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    /// Convert .flac file or directory with multiple .flac files to .aiff.
+    /// Convert FLAC, AIFF, or WAV files to a target lossless format.
     Convert(ConvertArgs),
 
     /// Check whether the system is ready to run conversions.
     Doctor(DoctorArgs),
 }
 
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Args)]
 pub struct ConvertArgs {
-    /// Input `.flac` file or directory to convert.
+    /// Input audio file or directory to convert. Source format is inferred from extension.
     pub input_path: PathBuf,
 
-    /// Write converted `.aiff` files into this directory.
+    /// Target format: flac, aiff, or wav. Falls back to FLACSER_CONVERT_TO.
+    #[arg(long, value_enum, env = "FLACSER_CONVERT_TO")]
+    pub to: Option<AudioFormat>,
+
+    /// Write converted files into this directory.
     #[arg(short = 'o', long)]
     pub output_dir: Option<PathBuf>,
 
@@ -52,6 +58,10 @@ pub struct ConvertArgs {
 pub struct DoctorArgs {
     /// Optional input path to diagnose before conversion.
     pub input_path: Option<PathBuf>,
+
+    /// Target format: flac, aiff, or wav. Falls back to FLACSER_CONVERT_TO.
+    #[arg(long, value_enum, env = "FLACSER_CONVERT_TO")]
+    pub to: Option<AudioFormat>,
 
     /// Diagnose this output directory without creating it.
     #[arg(short = 'o', long)]

@@ -1,15 +1,16 @@
 # flacser
 
-`flacser` is a Rust CLI tool that converts `.flac` files to `.aiff` using `ffmpeg`.
+`flacser` is a Rust CLI tool that converts lossless FLAC, AIFF, and WAV files using `ffmpeg`.
 
 It supports single-file conversion, directory batch conversion with parallel execution, and a read-only `doctor` command for readiness checks.
 
 ## Requirements
 
 - `ffmpeg`
+- `ffprobe`
 - Rust toolchain (for building from source)
 
-Install `ffmpeg`:
+Install the FFmpeg suite:
 
 ```bash
 # Arch 
@@ -25,7 +26,7 @@ brew install ffmpeg
 Windows:
 
 - install FFmpeg
-- ensure `ffmpeg.exe` is available on `PATH`
+- ensure `ffmpeg.exe` and `ffprobe.exe` are available on `PATH`
 
 ## Build
 
@@ -47,26 +48,28 @@ flacser <COMMAND> [OPTIONS]
 
 ### Commands
 
-- `convert [OPTIONS] <INPUT_PATH>`: convert a `.flac` file or directory of `.flac` files
-- `doctor [OPTIONS] <INPUT_PATH>`: check whether the system is ready to run conversions
+- `convert [OPTIONS] <INPUT_PATH>`: convert between FLAC, AIFF, and WAV
+- `doctor [OPTIONS] [INPUT_PATH]`: check whether the system is ready to run conversions
 
 `<INPUT_PATH>` for `convert` can be:
 
-- a single `.flac` file
+- a single `.flac`, `.aiff`, `.aif`, or `.wav` file
 - a directory (batch mode)
 
 ### Options
 
 `convert`:
 
+- `--to <FORMAT>`: target format (`flac`, `aiff`, or `wav`); required unless `FLACSER_CONVERT_TO` is set
 - `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: write outputs into a specific directory
-- `--dry-run, -n`: plan/execute flow without running `ffmpeg`
+- `--dry-run, -n`: plan/execute flow without running `ffmpeg` or `ffprobe`
 - `--recursive, -r`: recurse into subdirectories in directory mode
 - `--flatten, -f`: write recursive directory outputs directly into the output directory and fail if flattened output names collide
 - `--jobs <JOBS>, -j <JOBS>`: set the number of parallel conversion jobs
 
 `doctor`:
 
+- `--to <FORMAT>`: target format (`flac`, `aiff`, or `wav`) to validate conversion planning; falls back to `FLACSER_CONVERT_TO`
 - `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: diagnose a specific output directory
 - `--jobs <JOBS>, -j <JOBS>`: diagnose a specific parallel worker limit
 
@@ -76,16 +79,20 @@ flacser <COMMAND> [OPTIONS]
 
 ### File mode
 
-- Converts one `.flac` file to `.aiff`
+- Converts one supported `.flac`, `.aiff`, `.aif`, or `.wav` input file to the requested target format
+- Source format is inferred from the file extension case-insensitively
+- `.aif` is accepted as AIFF input, but `--to aif` is not supported
 - Default output path is next to the input file
 - If `--output-dir` is set, output is written there
+- Supports all cross-format FLAC/AIFF/WAV conversions; same-format conversion is rejected
 
 ### Directory mode
 
 - Non-recursive by default (top-level only)
 - Recurses into subdirectories when `--recursive` is set
-- Finds `.flac` files case-insensitively
+- Finds `.flac`, `.aiff`, `.aif`, and `.wav` files case-insensitively
 - Preserves relative structure from the input root
+- Uses the target format's canonical extension; AIFF outputs use `.aiff`
 - Non-flatten planning checks collisions on exact output paths
 - With `--recursive --flatten`, writes all outputs directly into the output root and fails if flattened output names collide, including ASCII case-insensitive pairs such as `Song.aiff` and `song.aiff`
 - `--flatten` has no effect without `--recursive` because non-recursive discovery only sees top-level files
@@ -103,9 +110,10 @@ flacser <COMMAND> [OPTIONS]
 ### Doctor command
 
 - Prints a read-only report with `ok`, `warn`, and `fail` checks
-- Verifies `ffmpeg` availability and version
+- Verifies `ffmpeg` and `ffprobe` availability and version
 - Checks detected CPU cores and default worker settings
-- Optionally validates an input path, output directory, and configured worker limit
+- Optionally validates an input path, target format, output directory, and configured worker limit
+- Requires `--to` or `FLACSER_CONVERT_TO` to validate output planning for an input path
 - Validates directory inputs with recursive discovery (always scans subdirectories)
 - Exits non-zero when any required check fails
 
@@ -114,25 +122,31 @@ flacser <COMMAND> [OPTIONS]
 Single file:
 
 ```bash
-flacser convert ./music/track.flac
+flacser convert ./music/track.flac --to aiff
 ```
 
 Single file with output dir:
 
 ```bash
-flacser convert ./music/track.flac --output-dir ./out
+flacser convert ./music/track.flac --to wav --output-dir ./out
 ```
 
 Directory dry run:
 
 ```bash
-flacser convert ./music --dry-run
+flacser convert ./music --to aiff --dry-run
 ```
 
 Directory conversion with two parallel jobs:
 
 ```bash
-flacser convert ./music --jobs 2
+flacser convert ./music --to flac --jobs 2
+```
+
+Environment fallback target:
+
+```bash
+FLACSER_CONVERT_TO=aiff flacser convert ./music
 ```
 
 Flatten recursive directory output:
@@ -144,8 +158,15 @@ flacser convert ./music --recursive --flatten --output-dir ./out
 System readiness check:
 
 ```bash
-flacser doctor ./music --output-dir ./out --jobs 2
+flacser doctor ./music --to aiff --output-dir ./out --jobs 2
 ```
+
+## Encoding and metadata
+
+- FLAC output uses the `flac` encoder
+- WAV and AIFF output select PCM codecs from the source bit depth and sample format reported by `ffprobe`
+- WAV output keeps the first audio stream and drops cover art / non-audio / extra streams
+- Metadata is best-effort and depends on ffmpeg/container support
 
 ## Testing
 
@@ -159,7 +180,7 @@ Test suite includes:
 
 - unit tests for discover/plan/convert/summary/config logic
 - integration tests for CLI behavior and exit codes
-- cross-platform integration tests with mocked `ffmpeg` and `PATH` portability helpers
+- cross-platform integration tests with mocked `ffmpeg` / `ffprobe` and `PATH` portability helpers
 
 CI runs the Rust test suite on Ubuntu, Windows, and macOS.
 

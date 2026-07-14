@@ -5,63 +5,55 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 
+use crate::audio_format::AudioFormat;
 use crate::config::Config;
 
 #[derive(Debug, Clone)]
 pub struct ConversionJob {
     pub input: PathBuf,
     pub output: PathBuf,
+    pub source_format: AudioFormat,
+    pub target_format: AudioFormat,
 }
 
 pub fn plan(config: &Config, inputs: Vec<PathBuf>) -> Result<Vec<ConversionJob>> {
-    let original_input = config.input_path.as_path();
+    let original_input_path = config.input_path.as_path();
     let output_dir = config.output_dir.as_deref();
+    let target_format = config.target_format;
+    let flatten = config.flatten;
     validate_output_dir(output_dir)?;
 
-    let input_is_directory = original_input.is_dir();
     let jobs = inputs
         .into_iter()
         .map(|input| {
-            let output = if input_is_directory {
-                let root = output_dir.unwrap_or(original_input);
-                let mut output = if config.flatten {
-                    let file_name = input.file_name().with_context(|| {
-                        format!("input file has no file name: {}", input.display())
-                    })?;
-                    root.join(file_name)
-                } else {
-                    let relative = input.strip_prefix(original_input).with_context(|| {
-                        format!(
-                            "could not derive relative path from {} against {}",
-                            input.display(),
-                            original_input.display()
-                        )
-                    })?;
-                    root.join(relative)
-                };
-                output.set_extension("aiff");
-                output
-            } else {
-                let file_name = input
-                    .file_name()
-                    .with_context(|| format!("input file has no file name: {}", input.display()))?;
+            let source_format = AudioFormat::from_path(&input)
+                .with_context(|| format!("unsupported input file: {}", input.display()))?;
 
-                let mut output_file_name = PathBuf::from(file_name);
-                output_file_name.set_extension("aiff");
+            if source_format == target_format {
+                bail!(
+                    "source and target formats are both {target_format}; same-format conversion is not supported for {}",
+                    input.display()
+                );
+            }
 
-                let root = output_dir.unwrap_or_else(|| input.parent().unwrap_or(Path::new(".")));
-                root.join(output_file_name)
-            };
+            let output =
+                planned_output_path(original_input_path, &input, output_dir, target_format, flatten)?;
 
-            Ok(ConversionJob { input, output })
+            Ok(ConversionJob {
+                input,
+                output,
+                source_format,
+                target_format,
+            })
         })
         .collect::<Result<Vec<_>>>()?;
 
     detect_output_collisions(&jobs, config.flatten)?;
+
     Ok(jobs)
 }
 
-fn validate_output_dir(output_dir: Option<&Path>) -> Result<()> {
+pub(crate) fn validate_output_dir(output_dir: Option<&Path>) -> Result<()> {
     match output_dir {
         None => Ok(()),
         Some(dir) => {
@@ -77,7 +69,50 @@ fn validate_output_dir(output_dir: Option<&Path>) -> Result<()> {
     }
 }
 
-fn detect_output_collisions(jobs: &[ConversionJob], flatten: bool) -> Result<()> {
+pub(crate) fn planned_output_path(
+    original_input: &Path,
+    input: &Path,
+    output_dir: Option<&Path>,
+    target_format: AudioFormat,
+    flatten: bool,
+) -> Result<PathBuf> {
+    let input_is_directory = original_input.is_dir();
+
+    if input_is_directory {
+        let root = output_dir.unwrap_or(original_input);
+        let mut output = if flatten {
+            let file_name = input
+                .file_name()
+                .with_context(|| format!("input file has no file name: {}", input.display()))?;
+
+            root.join(file_name)
+        } else {
+            let relative = input.strip_prefix(original_input).with_context(|| {
+                format!(
+                    "could not derive relative path from {} against {}",
+                    input.display(),
+                    original_input.display()
+                )
+            })?;
+            root.join(relative)
+        };
+
+        output.set_extension(target_format.as_str());
+        Ok(output)
+    } else {
+        let file_name = input
+            .file_name()
+            .with_context(|| format!("input file has no file name: {}", input.display()))?;
+
+        let mut output_file_name = PathBuf::from(file_name);
+        output_file_name.set_extension(target_format.as_str());
+
+        let root = output_dir.unwrap_or_else(|| input.parent().unwrap_or(Path::new(".")));
+        Ok(root.join(output_file_name))
+    }
+}
+
+pub(crate) fn detect_output_collisions(jobs: &[ConversionJob], flatten: bool) -> Result<()> {
     if flatten {
         let mut seen: HashMap<Vec<u8>, &Path> = HashMap::new();
 
@@ -140,7 +175,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     use std::os::unix::ffi::OsStringExt;
 
-    use crate::config::Config;
+    use crate::{audio_format::AudioFormat, config::Config};
 
     use super::plan;
 
@@ -153,7 +188,11 @@ mod tests {
         dir
     }
 
-    fn test_config(input_path: PathBuf, output_dir: Option<PathBuf>) -> Config {
+    fn test_config_to(
+        input_path: PathBuf,
+        output_dir: Option<PathBuf>,
+        target_format: AudioFormat,
+    ) -> Config {
         Config {
             input_path,
             output_dir,
@@ -161,7 +200,12 @@ mod tests {
             recursive: false,
             flatten: false,
             jobs: 1,
+            target_format,
         }
+    }
+
+    fn test_config(input_path: PathBuf, output_dir: Option<PathBuf>) -> Config {
+        test_config_to(input_path, output_dir, AudioFormat::Aiff)
     }
 
     #[test]
@@ -175,6 +219,82 @@ mod tests {
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].input, input);
         assert_eq!(jobs[0].output, dir.join("track.aiff"));
+        assert_eq!(jobs[0].source_format, AudioFormat::Flac);
+        assert_eq!(jobs[0].target_format, AudioFormat::Aiff);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn cross_format_routes_map_to_target_extension() {
+        for (name, input_name, target, output_name, source) in [
+            (
+                "flac-to-wav",
+                "track.flac",
+                AudioFormat::Wav,
+                "track.wav",
+                AudioFormat::Flac,
+            ),
+            (
+                "wav-to-flac",
+                "track.wav",
+                AudioFormat::Flac,
+                "track.flac",
+                AudioFormat::Wav,
+            ),
+            (
+                "aiff-to-flac",
+                "track.aiff",
+                AudioFormat::Flac,
+                "track.flac",
+                AudioFormat::Aiff,
+            ),
+            (
+                "aif-to-flac",
+                "track.aif",
+                AudioFormat::Flac,
+                "track.flac",
+                AudioFormat::Aiff,
+            ),
+            (
+                "aiff-to-wav",
+                "track.aiff",
+                AudioFormat::Wav,
+                "track.wav",
+                AudioFormat::Aiff,
+            ),
+            (
+                "wav-to-aiff",
+                "track.wav",
+                AudioFormat::Aiff,
+                "track.aiff",
+                AudioFormat::Wav,
+            ),
+        ] {
+            let dir = test_dir(name);
+            let input = dir.join(input_name);
+            fs::write(&input, b"").expect("create input");
+
+            let config = test_config_to(input.clone(), None, target);
+            let jobs = plan(&config, vec![input]).expect("plan should succeed");
+
+            assert_eq!(jobs[0].output, dir.join(output_name));
+            assert_eq!(jobs[0].source_format, source);
+            assert_eq!(jobs[0].target_format, target);
+
+            let _ = fs::remove_dir_all(dir);
+        }
+    }
+
+    #[test]
+    fn rejects_same_format_conversion() {
+        let dir = test_dir("same-format");
+        let input = dir.join("track.wav");
+        fs::write(&input, b"").expect("create input");
+
+        let config = test_config_to(input.clone(), None, AudioFormat::Wav);
+        let error = plan(&config, vec![input]).expect_err("plan should fail");
+        assert!(error.to_string().contains("same-format conversion"));
 
         let _ = fs::remove_dir_all(dir);
     }

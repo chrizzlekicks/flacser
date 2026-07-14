@@ -1,3 +1,4 @@
+mod audio_format;
 mod cli;
 mod config;
 mod convert;
@@ -24,13 +25,20 @@ fn run_convert(convert: cli::ConvertArgs) -> Result<()> {
     let interrupt = interrupt::InterruptFlag::new();
     interrupt::install_handler(interrupt.shared())?;
 
-    let config = config::Config::from_convert_args(convert);
+    let config = config::Config::from_convert_args(convert)?;
 
     let inputs = discover::discover(&config)?;
     let jobs = plan::plan(&config, inputs)?;
 
     if ffmpeg::is_needed(&config, &jobs) {
         ffmpeg::check_availability()?;
+    }
+
+    if ffmpeg::probe_is_needed(&config, &jobs) {
+        let probe = ffmpeg::probe_ffprobe_version();
+        if !probe.executable_found {
+            anyhow::bail!(ffmpeg::FFPROBE_NOT_FOUND);
+        }
     }
 
     let report = convert::execute(&config, jobs, &interrupt);

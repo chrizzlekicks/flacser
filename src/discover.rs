@@ -3,14 +3,32 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use walkdir::WalkDir;
 
+use crate::audio_format::AudioFormat;
 use crate::config::Config;
 
 pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
-    let input_path = config.input_path.as_path();
+    discover_with_excluded_target(
+        config.input_path.as_path(),
+        config.recursive,
+        Some(config.target_format),
+    )
+}
 
+pub fn discover_for_doctor(input_path: &Path, recursive: bool) -> Result<Vec<PathBuf>> {
+    discover_with_excluded_target(input_path, recursive, None)
+}
+
+fn discover_with_excluded_target(
+    input_path: &Path,
+    recursive: bool,
+    excluded_target: Option<AudioFormat>,
+) -> Result<Vec<PathBuf>> {
     if input_path.is_file() {
-        if !is_flac(input_path) {
-            bail!("input file is not a .flac file: {}", input_path.display());
+        if AudioFormat::from_path(input_path).is_none() {
+            bail!(
+                "input file is not a supported audio file (.flac, .aiff, .aif, .wav): {}",
+                input_path.display()
+            );
         }
         return Ok(vec![input_path.to_path_buf()]);
     }
@@ -22,7 +40,7 @@ pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
         );
     }
 
-    let max_depth = if config.recursive { usize::MAX } else { 1 };
+    let max_depth = if recursive { usize::MAX } else { 1 };
     let mut files = Vec::new();
 
     for entry in WalkDir::new(input_path).max_depth(max_depth) {
@@ -32,19 +50,13 @@ pub fn discover(config: &Config) -> Result<Vec<PathBuf>> {
         if !path.is_file() {
             continue;
         }
-        if is_flac(path) {
+        if AudioFormat::from_path(path).is_some_and(|format| Some(format) != excluded_target) {
             files.push(path.to_path_buf());
         }
     }
 
     files.sort();
     Ok(files)
-}
-
-fn is_flac(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("flac"))
 }
 
 #[cfg(test)]
@@ -57,7 +69,7 @@ mod tests {
 
     use crate::config::Config;
 
-    use super::discover;
+    use super::{discover, discover_for_doctor};
 
     fn test_dir(label: &str) -> PathBuf {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -78,6 +90,7 @@ mod tests {
             recursive: false,
             flatten: false,
             jobs: 1,
+            target_format: crate::audio_format::AudioFormat::Aiff,
         }
     }
 
@@ -89,6 +102,7 @@ mod tests {
             recursive: true,
             flatten: false,
             jobs: 1,
+            target_format: crate::audio_format::AudioFormat::Aiff,
         }
     }
 
@@ -106,14 +120,18 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_flac_input_file() {
-        let dir = test_dir("reject-non-flac");
-        let input = dir.join("song.wav");
+    fn rejects_unsupported_input_file() {
+        let dir = test_dir("reject-unsupported");
+        let input = dir.join("song.mp3");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(input.clone());
         let error = discover(&config).expect_err("discover should fail");
-        assert!(error.to_string().contains("input file is not a .flac file"));
+        assert!(
+            error
+                .to_string()
+                .contains("input file is not a supported audio file")
+        );
 
         let _ = fs::remove_dir_all(dir);
     }
@@ -141,6 +159,27 @@ mod tests {
     }
 
     #[test]
+    fn discovers_supported_input_files() {
+        let dir = test_dir("supported-inputs");
+        let flac = dir.join("song.flac");
+        let aiff = dir.join("song.aiff");
+        let aif = dir.join("song.aif");
+        let wav = dir.join("song.wav");
+        let txt = dir.join("ignore.txt");
+
+        fs::write(&flac, b"").expect("create flac");
+        fs::write(&aiff, b"").expect("create aiff");
+        fs::write(&aif, b"").expect("create aif");
+        fs::write(&wav, b"").expect("create wav");
+        fs::write(&txt, b"").expect("create txt");
+
+        let files = discover_for_doctor(&dir, false).expect("discover should succeed");
+        assert_eq!(files, vec![aif, aiff, flac, wav]);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn discovers_directory_recursively_when_enabled() {
         let dir = test_dir("recursive-dir");
         let a = dir.join("a.flac");
@@ -154,6 +193,22 @@ mod tests {
         let config = recursive_test_config(dir.clone());
         let files = discover(&config).expect("discover should succeed");
         assert_eq!(files, vec![a, nested]);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn excludes_target_format_files_when_discovering_directory_inputs() {
+        let dir = test_dir("exclude-target-format");
+        let flac = dir.join("song.flac");
+        let aiff = dir.join("song.aiff");
+
+        fs::write(&flac, b"").expect("create flac");
+        fs::write(&aiff, b"").expect("create aiff");
+
+        let config = test_config(dir.clone());
+        let files = discover(&config).expect("discover should succeed");
+        assert_eq!(files, vec![flac]);
 
         let _ = fs::remove_dir_all(dir);
     }
