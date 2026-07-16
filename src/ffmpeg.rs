@@ -10,6 +10,12 @@ use crate::plan::ConversionJob;
 use crate::{audio_format::AudioFormat, config::Config};
 
 const FFMPEG_NOT_FOUND: &str = "ffmpeg not found.\n\nInstall it with:\n  Arch:   sudo pacman -S ffmpeg\n  Ubuntu: sudo apt install ffmpeg\n  macOS:  brew install ffmpeg";
+
+pub fn wav_metadata_note() -> Option<&'static str> {
+    // WAV uses -map 0:a:0 which strips embedded cover art and non-audio streams
+    Some("WAV output strips embedded cover art and non-audio streams (ffmpeg limitation)")
+}
+
 pub const FFPROBE_NOT_FOUND: &str = "ffprobe not found.\n\nInstall it with:\n  Arch:   sudo pacman -S ffmpeg\n  Ubuntu: sudo apt install ffmpeg\n  macOS:  brew install ffmpeg";
 
 #[derive(Debug, Clone)]
@@ -508,5 +514,13 @@ mod tests {
 
         let error = pcm_codec_for(AudioFormat::Wav, &sample).expect_err("64-bit int should fail");
         assert!(error.to_string().contains("unsupported PCM bit depth"));
+    }
+
+    #[test]
+    fn wav_metadata_note_returns_message() {
+        assert!(super::wav_metadata_note().is_some());
+        let note = super::wav_metadata_note().unwrap();
+        assert!(note.contains("WAV"));
+        assert!(note.contains("cover art"));
     }
 }
