@@ -165,12 +165,7 @@ fn output_file_name_bytes(output: &Path) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        ffi::OsString,
-        fs,
-        path::PathBuf,
-        sync::atomic::{AtomicU64, Ordering},
-    };
+    use std::{ffi::OsString, fs, path::PathBuf};
 
     #[cfg(target_os = "linux")]
     use std::os::unix::ffi::OsStringExt;
@@ -179,13 +174,8 @@ mod tests {
 
     use super::plan;
 
-    fn test_dir(label: &str) -> PathBuf {
-        static COUNTER: AtomicU64 = AtomicU64::new(0);
-        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir =
-            std::env::temp_dir().join(format!("flacser-plan-{label}-{}-{id}", std::process::id()));
-        fs::create_dir_all(&dir).expect("create test dir");
-        dir
+    fn test_dir() -> tempfile::TempDir {
+        tempfile::tempdir().expect("create test dir")
     }
 
     fn test_config_to(
@@ -210,100 +200,88 @@ mod tests {
 
     #[test]
     fn single_file_maps_to_same_parent_by_default() {
-        let dir = test_dir("single-default-output");
-        let input = dir.join("track.flac");
+        let dir = test_dir();
+        let input = dir.path().join("track.flac");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(input.clone(), None);
         let jobs = plan(&config, vec![input.clone()]).expect("plan should succeed");
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].input, input);
-        assert_eq!(jobs[0].output, dir.join("track.aiff"));
+        assert_eq!(jobs[0].output, dir.path().join("track.aiff"));
         assert_eq!(jobs[0].source_format, AudioFormat::Flac);
         assert_eq!(jobs[0].target_format, AudioFormat::Aiff);
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn cross_format_routes_map_to_target_extension() {
-        for (name, input_name, target, output_name, source) in [
+        for (input_name, target, output_name, source) in [
             (
-                "flac-to-wav",
                 "track.flac",
                 AudioFormat::Wav,
                 "track.wav",
                 AudioFormat::Flac,
             ),
             (
-                "wav-to-flac",
                 "track.wav",
                 AudioFormat::Flac,
                 "track.flac",
                 AudioFormat::Wav,
             ),
             (
-                "aiff-to-flac",
                 "track.aiff",
                 AudioFormat::Flac,
                 "track.flac",
                 AudioFormat::Aiff,
             ),
             (
-                "aif-to-flac",
                 "track.aif",
                 AudioFormat::Flac,
                 "track.flac",
                 AudioFormat::Aiff,
             ),
             (
-                "aiff-to-wav",
                 "track.aiff",
                 AudioFormat::Wav,
                 "track.wav",
                 AudioFormat::Aiff,
             ),
             (
-                "wav-to-aiff",
                 "track.wav",
                 AudioFormat::Aiff,
                 "track.aiff",
                 AudioFormat::Wav,
             ),
         ] {
-            let dir = test_dir(name);
-            let input = dir.join(input_name);
+            let dir = test_dir();
+            let input = dir.path().join(input_name);
             fs::write(&input, b"").expect("create input");
 
             let config = test_config_to(input.clone(), None, target);
             let jobs = plan(&config, vec![input]).expect("plan should succeed");
 
-            assert_eq!(jobs[0].output, dir.join(output_name));
+            assert_eq!(jobs[0].output, dir.path().join(output_name));
             assert_eq!(jobs[0].source_format, source);
             assert_eq!(jobs[0].target_format, target);
-
-            let _ = fs::remove_dir_all(dir);
         }
     }
 
     #[test]
     fn rejects_same_format_conversion() {
-        let dir = test_dir("same-format");
-        let input = dir.join("track.wav");
+        let dir = test_dir();
+        let input = dir.path().join("track.wav");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config_to(input.clone(), None, AudioFormat::Wav);
         let error = plan(&config, vec![input]).expect_err("plan should fail");
         assert!(error.to_string().contains("same-format conversion"));
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn single_file_maps_to_output_dir_when_provided() {
-        let dir = test_dir("single-custom-output");
-        let input = dir.join("track.flac");
-        let output_dir = dir.join("out");
+        let dir = test_dir();
+        let input = dir.path().join("track.flac");
+        let output_dir = dir.path().join("out");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(input.clone(), Some(output_dir.clone()));
@@ -311,14 +289,12 @@ mod tests {
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].input, input);
         assert_eq!(jobs[0].output, output_dir.join("track.aiff"));
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn directory_mode_preserves_relative_structure() {
-        let dir = test_dir("directory-relative");
-        let input_root = dir.join("input");
+        let dir = test_dir();
+        let input_root = dir.path().join("input");
         let nested_dir = input_root.join("album");
         let nested_input = nested_dir.join("song.flac");
         fs::create_dir_all(&nested_dir).expect("create nested dir");
@@ -329,15 +305,13 @@ mod tests {
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].input, nested_input);
         assert_eq!(jobs[0].output, input_root.join("album/song.aiff"));
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn rejects_output_dir_when_path_is_file() {
-        let dir = test_dir("output-file");
-        let input = dir.join("track.flac");
-        let output_path = dir.join("out");
+        let dir = test_dir();
+        let input = dir.path().join("track.flac");
+        let output_path = dir.path().join("out");
         fs::write(&input, b"").expect("create input");
         fs::write(&output_path, b"").expect("create output file");
 
@@ -348,21 +322,19 @@ mod tests {
                 .to_string()
                 .contains("output path exists but is not a directory")
         );
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn detects_output_collisions_before_execution() {
-        let dir = test_dir("collision");
-        let output_dir = dir.join("out");
+        let dir = test_dir();
+        let output_dir = dir.path().join("out");
         fs::create_dir_all(&output_dir).expect("create output dir");
 
-        let original_input = dir.join("original.flac");
+        let original_input = dir.path().join("original.flac");
         fs::write(&original_input, b"").expect("create original input");
 
-        let input_a_dir = dir.join("a");
-        let input_b_dir = dir.join("b");
+        let input_a_dir = dir.path().join("a");
+        let input_b_dir = dir.path().join("b");
         fs::create_dir_all(&input_a_dir).expect("create a dir");
         fs::create_dir_all(&input_b_dir).expect("create b dir");
         let input_a = input_a_dir.join("song.flac");
@@ -373,14 +345,12 @@ mod tests {
         let config = test_config(original_input, Some(output_dir));
         let error = plan(&config, vec![input_a, input_b]).expect_err("plan should fail");
         assert!(error.to_string().contains("output collision detected"));
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn flatten_directory_maps_to_input_root() {
-        let dir = test_dir("flatten-default");
-        let input_root = dir.join("input");
+        let dir = test_dir();
+        let input_root = dir.path().join("input");
         let album_a = input_root.join("album-a");
         let album_b = input_root.join("album-b");
         fs::create_dir_all(&album_a).expect("create album-a");
@@ -397,20 +367,18 @@ mod tests {
         assert_eq!(jobs.len(), 2);
         assert_eq!(jobs[0].output, input_root.join("song.aiff"));
         assert_eq!(jobs[1].output, input_root.join("track.aiff"));
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn flatten_directory_with_output_dir_maps_to_output_root() {
-        let dir = test_dir("flatten-output-dir");
-        let input_root = dir.join("input");
+        let dir = test_dir();
+        let input_root = dir.path().join("input");
         let album_a = input_root.join("album-a");
         fs::create_dir_all(&album_a).expect("create album-a");
         let song_a = album_a.join("song.flac");
         fs::write(&song_a, b"").expect("create song a");
 
-        let output_dir = dir.join("output");
+        let output_dir = dir.path().join("output");
         fs::create_dir_all(&output_dir).expect("create output dir");
 
         let mut config = test_config(input_root.clone(), Some(output_dir.clone()));
@@ -418,14 +386,12 @@ mod tests {
         let jobs = plan(&config, vec![song_a.clone()]).expect("plan should succeed");
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].output, output_dir.join("song.aiff"));
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn flatten_detects_collisions_from_different_subdirs() {
-        let dir = test_dir("flatten-collision");
-        let input_root = dir.join("input");
+        let dir = test_dir();
+        let input_root = dir.path().join("input");
         let album_a = input_root.join("album-a");
         let album_b = input_root.join("album-b");
         fs::create_dir_all(&album_a).expect("create album-a");
@@ -439,14 +405,12 @@ mod tests {
         config.flatten = true;
         let error = plan(&config, vec![song_a, song_b]).expect_err("plan should fail");
         assert!(error.to_string().contains("output collision detected"));
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn flatten_detects_case_insensitive_collisions() {
-        let dir = test_dir("flatten-case-collision");
-        let input_root = dir.join("input");
+        let dir = test_dir();
+        let input_root = dir.path().join("input");
         let album_a = input_root.join("album-a");
         let album_b = input_root.join("album-b");
         fs::create_dir_all(&album_a).expect("create album-a");
@@ -460,17 +424,15 @@ mod tests {
         config.flatten = true;
         let error = plan(&config, vec![song_a, song_b]).expect_err("plan should fail");
         assert!(error.to_string().contains("output collision detected"));
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn flatten_is_noop_for_single_file() {
-        let dir = test_dir("flatten-single-file");
-        let input = dir.join("track.flac");
+        let dir = test_dir();
+        let input = dir.path().join("track.flac");
         fs::write(&input, b"").expect("create input");
 
-        let output_dir = dir.join("output");
+        let output_dir = dir.path().join("output");
         fs::create_dir_all(&output_dir).expect("create output dir");
 
         let mut config = test_config(input.clone(), Some(output_dir.clone()));
@@ -478,15 +440,13 @@ mod tests {
         let jobs = plan(&config, vec![input.clone()]).expect("plan should succeed");
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].output, output_dir.join("track.aiff"));
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[cfg(target_os = "linux")]
     #[test]
     fn non_flatten_allows_distinct_non_utf8_paths() {
-        let dir = test_dir("non-flatten-non-utf8");
-        let input_root = dir.join("input");
+        let dir = test_dir();
+        let input_root = dir.path().join("input");
         fs::create_dir_all(&input_root).expect("create input root");
 
         let input_a = input_root.join(OsString::from_vec(b"a\xff.flac".to_vec()));
@@ -499,15 +459,13 @@ mod tests {
             plan(&config, vec![input_a.clone(), input_b.clone()]).expect("plan should succeed");
         assert_eq!(jobs.len(), 2);
         assert_ne!(jobs[0].output, jobs[1].output);
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[cfg(target_os = "linux")]
     #[test]
     fn flatten_allows_distinct_non_utf8_paths() {
-        let dir = test_dir("flatten-non-utf8");
-        let input_root = dir.join("input");
+        let dir = test_dir();
+        let input_root = dir.path().join("input");
         let album_a = input_root.join("album-a");
         let album_b = input_root.join("album-b");
         fs::create_dir_all(&album_a).expect("create album-a");
@@ -524,7 +482,5 @@ mod tests {
             plan(&config, vec![input_a.clone(), input_b.clone()]).expect("plan should succeed");
         assert_eq!(jobs.len(), 2);
         assert_ne!(jobs[0].output, jobs[1].output);
-
-        let _ = fs::remove_dir_all(dir);
     }
 }
