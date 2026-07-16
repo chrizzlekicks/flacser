@@ -8,6 +8,7 @@ use anyhow::Result;
 
 use rayon::prelude::*;
 
+use crate::audio_format::AudioFormat;
 use crate::config::Config;
 use crate::ffmpeg::run_ffmpeg;
 use crate::interrupt::InterruptFlag;
@@ -63,6 +64,10 @@ fn execute_with_runner(
         .num_threads(workers)
         .build()
         .expect("failed to build rayon threadpool");
+
+    if jobs.iter().any(|j| j.target_format == AudioFormat::Wav) {
+        eprintln!("{}", crate::ffmpeg::wav_metadata_note().unwrap());
+    }
 
     let results: Vec<JobResult> = pool.install(|| {
         jobs.into_par_iter()
@@ -610,5 +615,31 @@ mod tests {
 
         assert_eq!(report.results.len(), 2);
         assert_eq!(report.workers, 2);
+    }
+
+    #[test]
+    fn execute_successfully_converts_wav_target() {
+        let dir = test_dir("wav-target");
+        let input = dir.join("song.flac");
+        let output = dir.join("song.wav");
+        fs::write(&input, b"").expect("create input");
+
+        let config = test_config(false);
+        let report = execute_with_runner(
+            &config,
+            vec![ConversionJob {
+                input,
+                output,
+                source_format: AudioFormat::Flac,
+                target_format: AudioFormat::Wav,
+            }],
+            runner_ok,
+            &interrupt_flag(),
+        );
+
+        assert_eq!(report.results.len(), 1);
+        assert!(matches!(report.results[0], JobResult::Converted));
+
+        let _ = fs::remove_dir_all(dir);
     }
 }
