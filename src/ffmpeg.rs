@@ -11,10 +11,9 @@ use crate::{audio_format::AudioFormat, config::Config};
 
 const FFMPEG_NOT_FOUND: &str = "ffmpeg not found.\n\nInstall it with:\n  Arch:   sudo pacman -S ffmpeg\n  Ubuntu: sudo apt install ffmpeg\n  macOS:  brew install ffmpeg";
 
-pub fn wav_metadata_note() -> Option<&'static str> {
-    // WAV uses -map 0:a:0 which strips embedded cover art and non-audio streams
-    Some("WAV output strips embedded cover art and non-audio streams (ffmpeg limitation)")
-}
+/// WAV uses -map 0:a:0 which strips embedded cover art and non-audio streams.
+pub const WAV_METADATA_NOTE: &str =
+    "WAV output strips embedded cover art and non-audio streams (ffmpeg limitation)";
 
 pub const FFPROBE_NOT_FOUND: &str = "ffprobe not found.\n\nInstall it with:\n  Arch:   sudo pacman -S ffmpeg\n  Ubuntu: sudo apt install ffmpeg\n  macOS:  brew install ffmpeg";
 
@@ -32,16 +31,14 @@ pub fn check_availability() -> Result<()> {
 }
 
 pub fn read_version() -> Result<String> {
-    read_version_output()
-        .map(|output| output.version)
-        .map_err(|error| anyhow::anyhow!(error.message))
+    read_version_output().map_err(|error| anyhow::anyhow!(error.message))
 }
 
 pub fn probe_version() -> VersionProbe {
     match read_version_output() {
         Ok(output) => VersionProbe {
             executable_found: true,
-            version: Ok(output.version),
+            version: Ok(output),
         },
         Err(error) => VersionProbe {
             executable_found: !error.spawn_failed,
@@ -54,17 +51,13 @@ pub fn probe_ffprobe_version() -> VersionProbe {
     match read_ffprobe_version_output() {
         Ok(output) => VersionProbe {
             executable_found: true,
-            version: Ok(output.version),
+            version: Ok(output),
         },
         Err(error) => VersionProbe {
             executable_found: !error.spawn_failed,
             version: Err(error.message),
         },
     }
-}
-
-struct VersionOutput {
-    version: String,
 }
 
 struct VersionError {
@@ -116,18 +109,18 @@ fn run_command_candidate<T>(
     Err(spawn_error.expect("at least one ffmpeg candidate"))
 }
 
-fn read_version_output() -> std::result::Result<VersionOutput, VersionError> {
+fn read_version_output() -> std::result::Result<String, VersionError> {
     read_command_version_output("ffmpeg", run_ffmpeg_candidate)
 }
 
-fn read_ffprobe_version_output() -> std::result::Result<VersionOutput, VersionError> {
+fn read_ffprobe_version_output() -> std::result::Result<String, VersionError> {
     read_command_version_output("ffprobe", run_ffprobe_candidate)
 }
 
 fn read_command_version_output(
     command_name: &str,
     run_candidate: impl FnOnce(fn(&str) -> io::Result<Output>) -> io::Result<Output>,
-) -> std::result::Result<VersionOutput, VersionError> {
+) -> std::result::Result<String, VersionError> {
     fn read_candidate_version(candidate: &str) -> io::Result<Output> {
         Command::new(candidate)
             .arg("-version")
@@ -164,9 +157,7 @@ fn read_command_version_output(
             message: format!("{command_name} version output was empty"),
         })?;
 
-    Ok(VersionOutput {
-        version: first_line.to_string(),
-    })
+    Ok(first_line.to_string())
 }
 
 pub fn is_needed(config: &Config, jobs: &[ConversionJob]) -> bool {
@@ -514,13 +505,5 @@ mod tests {
 
         let error = pcm_codec_for(AudioFormat::Wav, &sample).expect_err("64-bit int should fail");
         assert!(error.to_string().contains("unsupported PCM bit depth"));
-    }
-
-    #[test]
-    fn wav_metadata_note_returns_message() {
-        assert!(super::wav_metadata_note().is_some());
-        let note = super::wav_metadata_note().unwrap();
-        assert!(note.contains("WAV"));
-        assert!(note.contains("cover art"));
     }
 }

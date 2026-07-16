@@ -61,25 +61,14 @@ fn discover_with_excluded_target(
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        path::PathBuf,
-        sync::atomic::{AtomicU64, Ordering},
-    };
+    use std::{fs, path::PathBuf};
 
     use crate::config::Config;
 
     use super::{discover, discover_for_doctor};
 
-    fn test_dir(label: &str) -> PathBuf {
-        static COUNTER: AtomicU64 = AtomicU64::new(0);
-        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!(
-            "flacser-discover-{label}-{}-{id}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&dir).expect("create test dir");
-        dir
+    fn test_dir() -> tempfile::TempDir {
+        tempfile::tempdir().expect("create test dir")
     }
 
     fn test_config(input_path: PathBuf) -> Config {
@@ -108,21 +97,19 @@ mod tests {
 
     #[test]
     fn discovers_single_flac_input_file() {
-        let dir = test_dir("single");
-        let input = dir.join("song.flac");
+        let dir = test_dir();
+        let input = dir.path().join("song.flac");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(input.clone());
         let files = discover(&config).expect("discover should succeed");
         assert_eq!(files, vec![input]);
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn rejects_unsupported_input_file() {
-        let dir = test_dir("reject-unsupported");
-        let input = dir.join("song.mp3");
+        let dir = test_dir();
+        let input = dir.path().join("song.mp3");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(input.clone());
@@ -132,17 +119,15 @@ mod tests {
                 .to_string()
                 .contains("input file is not a supported audio file")
         );
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn discovers_directory_non_recursive_and_sorted() {
-        let dir = test_dir("dir");
-        let a = dir.join("a.flac");
-        let z = dir.join("z.flac");
-        let txt = dir.join("ignore.txt");
-        let nested_dir = dir.join("nested");
+        let dir = test_dir();
+        let a = dir.path().join("a.flac");
+        let z = dir.path().join("z.flac");
+        let txt = dir.path().join("ignore.txt");
+        let nested_dir = dir.path().join("nested");
         let nested = nested_dir.join("nested.flac");
 
         fs::write(&z, b"").expect("create z");
@@ -151,21 +136,19 @@ mod tests {
         fs::create_dir_all(&nested_dir).expect("create nested dir");
         fs::write(&nested, b"").expect("create nested");
 
-        let config = test_config(dir.clone());
+        let config = test_config(dir.path().to_path_buf());
         let files = discover(&config).expect("discover should succeed");
         assert_eq!(files, vec![a, z]);
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn discovers_supported_input_files() {
-        let dir = test_dir("supported-inputs");
-        let flac = dir.join("song.flac");
-        let aiff = dir.join("song.aiff");
-        let aif = dir.join("song.aif");
-        let wav = dir.join("song.wav");
-        let txt = dir.join("ignore.txt");
+        let dir = test_dir();
+        let flac = dir.path().join("song.flac");
+        let aiff = dir.path().join("song.aiff");
+        let aif = dir.path().join("song.aif");
+        let wav = dir.path().join("song.wav");
+        let txt = dir.path().join("ignore.txt");
 
         fs::write(&flac, b"").expect("create flac");
         fs::write(&aiff, b"").expect("create aiff");
@@ -173,49 +156,43 @@ mod tests {
         fs::write(&wav, b"").expect("create wav");
         fs::write(&txt, b"").expect("create txt");
 
-        let files = discover_for_doctor(&dir, false).expect("discover should succeed");
+        let files = discover_for_doctor(dir.path(), false).expect("discover should succeed");
         assert_eq!(files, vec![aif, aiff, flac, wav]);
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn discovers_directory_recursively_when_enabled() {
-        let dir = test_dir("recursive-dir");
-        let a = dir.join("a.flac");
-        let nested_dir = dir.join("nested");
+        let dir = test_dir();
+        let a = dir.path().join("a.flac");
+        let nested_dir = dir.path().join("nested");
         let nested = nested_dir.join("nested.flac");
 
         fs::write(&a, b"").expect("create a");
         fs::create_dir_all(&nested_dir).expect("create nested dir");
         fs::write(&nested, b"").expect("create nested");
 
-        let config = recursive_test_config(dir.clone());
+        let config = recursive_test_config(dir.path().to_path_buf());
         let files = discover(&config).expect("discover should succeed");
         assert_eq!(files, vec![a, nested]);
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn excludes_target_format_files_when_discovering_directory_inputs() {
-        let dir = test_dir("exclude-target-format");
-        let flac = dir.join("song.flac");
-        let aiff = dir.join("song.aiff");
+        let dir = test_dir();
+        let flac = dir.path().join("song.flac");
+        let aiff = dir.path().join("song.aiff");
 
         fs::write(&flac, b"").expect("create flac");
         fs::write(&aiff, b"").expect("create aiff");
 
-        let config = test_config(dir.clone());
+        let config = test_config(dir.path().to_path_buf());
         let files = discover(&config).expect("discover should succeed");
         assert_eq!(files, vec![flac]);
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn errors_when_input_path_does_not_exist() {
-        let missing = test_dir("missing-base").join("does-not-exist");
+        let missing = test_dir().path().join("does-not-exist");
         let config = test_config(missing.clone());
 
         let error = discover(&config).expect_err("discover should fail");

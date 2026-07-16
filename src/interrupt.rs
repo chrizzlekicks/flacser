@@ -5,6 +5,7 @@ use std::sync::{
 
 use anyhow::Result;
 
+#[derive(Clone)]
 pub struct InterruptFlag {
     interrupted: Arc<AtomicBool>,
 }
@@ -13,12 +14,6 @@ impl InterruptFlag {
     pub fn new() -> Self {
         Self {
             interrupted: Arc::new(AtomicBool::new(false)),
-        }
-    }
-
-    pub fn shared(&self) -> Self {
-        Self {
-            interrupted: Arc::clone(&self.interrupted),
         }
     }
 
@@ -61,9 +56,9 @@ mod tests {
     }
 
     #[test]
-    fn shared_flags_share_state() {
+    fn cloned_flags_share_state() {
         let flag = InterruptFlag::new();
-        let shared = flag.shared();
+        let shared = flag.clone();
 
         shared.interrupt();
 

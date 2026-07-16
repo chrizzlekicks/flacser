@@ -353,27 +353,15 @@ fn is_writable_metadata(metadata: &fs::Metadata) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        num::NonZeroUsize,
-        path::PathBuf,
-        sync::atomic::{AtomicU64, Ordering},
-    };
+    use std::{fs, num::NonZeroUsize, path::PathBuf};
 
     use crate::ffmpeg::VersionProbe;
     use crate::{audio_format::AudioFormat, cli::DoctorArgs};
 
     use super::{CheckStatus, DoctorCheck, DoctorInput, DoctorReport, diagnose};
 
-    fn test_dir(label: &str) -> PathBuf {
-        static COUNTER: AtomicU64 = AtomicU64::new(0);
-        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!(
-            "flacser-doctor-{label}-{}-{id}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&dir).expect("create test dir");
-        dir
+    fn test_dir() -> tempfile::TempDir {
+        tempfile::tempdir().expect("create test dir")
     }
 
     fn args(
@@ -578,8 +566,8 @@ mod tests {
 
     #[test]
     fn valid_file_input_reports_discovery_plan_and_workers() {
-        let dir = test_dir("file-input");
-        let input = dir.join("song.flac");
+        let dir = test_dir();
+        let input = dir.path().join("song.flac");
         fs::write(&input, b"").expect("create input");
 
         let report = diagnose(
@@ -597,14 +585,12 @@ mod tests {
         );
         assert_eq!(check(&report, "effective workers").detail, "1");
         assert!(report.is_ready());
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn valid_aiff_file_input_does_not_fail_same_format_planning() {
-        let dir = test_dir("aiff-file-input");
-        let input = dir.join("song.aiff");
+        let dir = test_dir();
+        let input = dir.path().join("song.aiff");
         fs::write(&input, b"").expect("create input");
 
         let report = diagnose(
@@ -617,14 +603,12 @@ mod tests {
         assert_eq!(check(&report, "discoverable files").status, CheckStatus::Ok);
         assert_eq!(check(&report, "output planning").status, CheckStatus::Ok);
         assert!(report.is_ready());
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn input_without_target_fails_output_planning() {
-        let dir = test_dir("targetless-file-input");
-        let input = dir.join("song.flac");
+        let dir = test_dir();
+        let input = dir.path().join("song.flac");
         fs::write(&input, b"").expect("create input");
 
         let report = diagnose(
@@ -645,19 +629,17 @@ mod tests {
                 .contains("target format is required")
         );
         assert!(!report.is_ready());
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn valid_directory_input_uses_recursive_discovery() {
-        let dir = test_dir("dir-input");
-        fs::write(dir.join("top.flac"), b"").expect("create top-level input");
-        fs::create_dir_all(dir.join("nested")).expect("create nested");
-        fs::write(dir.join("nested/inner.flac"), b"").expect("create nested input");
+        let dir = test_dir();
+        fs::write(dir.path().join("top.flac"), b"").expect("create top-level input");
+        fs::create_dir_all(dir.path().join("nested")).expect("create nested");
+        fs::write(dir.path().join("nested/inner.flac"), b"").expect("create nested input");
 
         let report = diagnose(
-            args(Some(dir.clone()), None, Some(4)),
+            args(Some(dir.path().to_path_buf()), None, Some(4)),
             passing_probe,
             passing_ffprobe_probe,
             || 8,
@@ -671,18 +653,16 @@ mod tests {
         );
         assert_eq!(check(&report, "effective workers").detail, "2");
         assert!(report.is_ready());
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn valid_directory_input_keeps_target_format_files_discoverable_for_doctor() {
-        let dir = test_dir("dir-input-mixed");
-        fs::write(dir.join("top.flac"), b"").expect("create top-level flac input");
-        fs::write(dir.join("top.aiff"), b"").expect("create top-level aiff input");
+        let dir = test_dir();
+        fs::write(dir.path().join("top.flac"), b"").expect("create top-level flac input");
+        fs::write(dir.path().join("top.aiff"), b"").expect("create top-level aiff input");
 
         let report = diagnose(
-            args(Some(dir.clone()), None, Some(4)),
+            args(Some(dir.path().to_path_buf()), None, Some(4)),
             passing_probe,
             passing_ffprobe_probe,
             || 8,
@@ -696,18 +676,16 @@ mod tests {
         );
         assert_eq!(check(&report, "output planning").status, CheckStatus::Ok);
         assert!(report.is_ready());
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn mixed_directory_detects_convert_output_collision_for_target() {
-        let dir = test_dir("dir-output-collision");
-        fs::write(dir.join("song.flac"), b"").expect("create flac input");
-        fs::write(dir.join("song.wav"), b"").expect("create wav input");
+        let dir = test_dir();
+        fs::write(dir.path().join("song.flac"), b"").expect("create flac input");
+        fs::write(dir.path().join("song.wav"), b"").expect("create wav input");
 
         let report = diagnose(
-            args(Some(dir.clone()), None, Some(4)),
+            args(Some(dir.path().to_path_buf()), None, Some(4)),
             passing_probe,
             passing_ffprobe_probe,
             || 8,
@@ -723,16 +701,14 @@ mod tests {
                 .contains("output collision detected")
         );
         assert!(!report.is_ready());
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn empty_directory_fails_discoverable_files() {
-        let dir = test_dir("empty-dir");
+        let dir = test_dir();
 
         let report = diagnose(
-            args(Some(dir.clone()), None, None),
+            args(Some(dir.path().to_path_buf()), None, None),
             passing_probe,
             passing_ffprobe_probe,
             || 8,
@@ -744,13 +720,11 @@ mod tests {
         );
         assert_eq!(check(&report, "effective workers").detail, "0");
         assert!(!report.is_ready());
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn missing_input_fails_input_diagnostics() {
-        let missing = test_dir("missing-input").join("missing");
+        let missing = test_dir().path().join("missing");
 
         let report = diagnose(
             args(Some(missing), None, None),
@@ -765,8 +739,8 @@ mod tests {
 
     #[test]
     fn unsupported_file_fails_discovery() {
-        let dir = test_dir("unsupported");
-        let input = dir.join("song.mp3");
+        let dir = test_dir();
+        let input = dir.path().join("song.mp3");
         fs::write(&input, b"").expect("create input");
 
         let report = diagnose(
@@ -781,16 +755,14 @@ mod tests {
             CheckStatus::Failed
         );
         assert!(!report.is_ready());
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn output_dir_existing_directory_passes() {
-        let dir = test_dir("output-dir");
+        let dir = test_dir();
 
         let report = diagnose(
-            args(None, Some(dir.clone()), None),
+            args(None, Some(dir.path().to_path_buf()), None),
             passing_probe,
             passing_ffprobe_probe,
             || 8,
@@ -798,14 +770,12 @@ mod tests {
 
         assert_eq!(check(&report, "output directory").status, CheckStatus::Ok);
         assert!(report.is_ready());
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn output_dir_existing_file_fails() {
-        let dir = test_dir("output-file");
-        let output = dir.join("out");
+        let dir = test_dir();
+        let output = dir.path().join("out");
         fs::write(&output, b"").expect("create output file");
 
         let report = diagnose(
@@ -820,14 +790,12 @@ mod tests {
             CheckStatus::Failed
         );
         assert!(!report.is_ready());
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn missing_output_dir_reports_createable_when_parent_is_writable() {
-        let dir = test_dir("missing-output-dir");
-        let output = dir.join("out").join("nested");
+        let dir = test_dir();
+        let output = dir.path().join("out").join("nested");
 
         let report = diagnose(
             args(None, Some(output), None),
@@ -840,10 +808,8 @@ mod tests {
         assert!(
             check(&report, "output directory")
                 .detail
-                .contains(&dir.display().to_string())
+                .contains(&dir.path().display().to_string())
         );
         assert!(report.is_ready());
-
-        let _ = fs::remove_dir_all(dir);
     }
 }

@@ -23,7 +23,7 @@ fn main() -> Result<()> {
 
 fn run_convert(convert: cli::ConvertArgs) -> Result<()> {
     let interrupt = interrupt::InterruptFlag::new();
-    interrupt::install_handler(interrupt.shared())?;
+    interrupt::install_handler(interrupt.clone())?;
 
     let config = config::Config::from_convert_args(convert)?;
 

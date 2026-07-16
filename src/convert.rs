@@ -66,7 +66,7 @@ fn execute_with_runner(
         .expect("failed to build rayon threadpool");
 
     if jobs.iter().any(|j| j.target_format == AudioFormat::Wav) {
-        eprintln!("{}", crate::ffmpeg::wav_metadata_note().unwrap());
+        eprintln!("{}", crate::ffmpeg::WAV_METADATA_NOTE);
     }
 
     let results: Vec<JobResult> = pool.install(|| {
@@ -178,7 +178,7 @@ mod tests {
     use std::{
         fs,
         path::{Path, PathBuf},
-        sync::atomic::{AtomicU64, AtomicUsize, Ordering},
+        sync::atomic::{AtomicUsize, Ordering},
         thread,
         time::Duration,
     };
@@ -191,15 +191,8 @@ mod tests {
 
     use super::{JobResult, execute_with_runner, temp_output_path};
 
-    fn test_dir(label: &str) -> PathBuf {
-        static COUNTER: AtomicU64 = AtomicU64::new(0);
-        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!(
-            "flacser-convert-{label}-{}-{id}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&dir).expect("create test dir");
-        dir
+    fn test_dir() -> tempfile::TempDir {
+        tempfile::tempdir().expect("create test dir")
     }
 
     fn test_config(dry_run: bool) -> Config {
@@ -262,9 +255,9 @@ mod tests {
 
     #[test]
     fn execute_skips_when_output_exists() {
-        let dir = test_dir("skip-existing");
-        let input = dir.join("song.flac");
-        let output = dir.join("song.aiff");
+        let dir = test_dir();
+        let input = dir.path().join("song.flac");
+        let output = dir.path().join("song.aiff");
         fs::write(&input, b"").expect("create input");
         fs::write(&output, b"").expect("create output");
 
@@ -284,8 +277,6 @@ mod tests {
         assert_eq!(report.results.len(), 1);
         assert!(matches!(report.results[0], JobResult::Skipped));
         assert_eq!(report.workers, 1);
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -294,9 +285,9 @@ mod tests {
             panic!("runner should not be called during dry-run");
         }
 
-        let dir = test_dir("dry-run");
-        let input = dir.join("song.flac");
-        let output = dir.join("song.aiff");
+        let dir = test_dir();
+        let input = dir.path().join("song.flac");
+        let output = dir.path().join("song.aiff");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(true);
@@ -314,15 +305,13 @@ mod tests {
 
         assert_eq!(report.results.len(), 1);
         assert!(matches!(report.results[0], JobResult::Converted));
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn execute_maps_runner_error_to_failed_result() {
-        let dir = test_dir("runner-fail");
-        let input = dir.join("song.flac");
-        let output = dir.join("nested/song.aiff");
+        let dir = test_dir();
+        let input = dir.path().join("song.flac");
+        let output = dir.path().join("nested/song.aiff");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(false);
@@ -351,15 +340,13 @@ mod tests {
             }
             _ => panic!("expected failed result"),
         }
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn execute_returns_failed_when_output_parent_is_not_directory() {
-        let dir = test_dir("mkdir-fail");
-        let input = dir.join("song.flac");
-        let blocked_parent = dir.join("blocked");
+        let dir = test_dir();
+        let input = dir.path().join("song.flac");
+        let blocked_parent = dir.path().join("blocked");
         let output = blocked_parent.join("song.aiff");
         fs::write(&input, b"").expect("create input");
         fs::write(&blocked_parent, b"").expect("create file that blocks directory creation");
@@ -392,8 +379,6 @@ mod tests {
             _ => panic!("expected failed result"),
         }
         assert!(!MKDIR_FAIL_RUNNER_CALLED.load(Ordering::Relaxed));
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -413,9 +398,9 @@ mod tests {
 
     #[test]
     fn successful_conversion_renames_temp_output_to_final_output() {
-        let dir = test_dir("temp-rename-success");
-        let input = dir.join("song.flac");
-        let output = dir.join("song.aiff");
+        let dir = test_dir();
+        let input = dir.path().join("song.flac");
+        let output = dir.path().join("song.aiff");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(false);
@@ -433,16 +418,14 @@ mod tests {
 
         assert!(matches!(report.results[0], JobResult::Converted));
         assert_eq!(fs::read(&output).expect("read final output"), b"converted");
-        assert!(temp_files_in(&dir).is_empty());
-
-        let _ = fs::remove_dir_all(dir);
+        assert!(temp_files_in(dir.path()).is_empty());
     }
 
     #[test]
     fn failed_conversion_removes_partial_temp_output_without_final_output() {
-        let dir = test_dir("temp-cleanup-fail");
-        let input = dir.join("song.flac");
-        let output = dir.join("song.aiff");
+        let dir = test_dir();
+        let input = dir.path().join("song.flac");
+        let output = dir.path().join("song.aiff");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(false);
@@ -460,9 +443,7 @@ mod tests {
 
         assert!(matches!(report.results[0], JobResult::Failed { .. }));
         assert!(!output.exists());
-        assert!(temp_files_in(&dir).is_empty());
-
-        let _ = fs::remove_dir_all(dir);
+        assert!(temp_files_in(dir.path()).is_empty());
     }
 
     #[test]
@@ -471,9 +452,9 @@ mod tests {
             panic!("runner should not be called after interrupt");
         }
 
-        let dir = test_dir("interrupted-before-job");
-        let input = dir.join("song.flac");
-        let output = dir.join("song.aiff");
+        let dir = test_dir();
+        let input = dir.path().join("song.flac");
+        let output = dir.path().join("song.aiff");
         fs::write(&input, b"").expect("create input");
         let interrupt = interrupt_flag();
         interrupt.interrupt();
@@ -495,24 +476,22 @@ mod tests {
         assert!(
             matches!(&report.results[0], JobResult::Interrupted { input: interrupted_input } if interrupted_input == &input)
         );
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn interrupt_during_batch_leaves_queued_jobs_unstarted() {
-        let dir = test_dir("interrupted-mid-batch");
+        let dir = test_dir();
         let interrupt = interrupt_flag();
-        let interrupter_interrupt = interrupt.shared();
+        let interrupter_interrupt = interrupt.clone();
         INTERRUPT_MID_BATCH_RUNNER_CALLS.store(0, Ordering::SeqCst);
 
         let jobs: Vec<_> = (0..4)
             .map(|id| {
-                let input = dir.join(format!("song-{id}.flac"));
+                let input = dir.path().join(format!("song-{id}.flac"));
                 fs::write(&input, b"").expect("create input");
                 ConversionJob {
                     input,
-                    output: dir.join(format!("song-{id}.aiff")),
+                    output: dir.path().join(format!("song-{id}.aiff")),
                     source_format: AudioFormat::Flac,
                     target_format: AudioFormat::Aiff,
                 }
@@ -549,15 +528,13 @@ mod tests {
                 .count(),
             3
         );
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn execute_successfully_converts_when_runner_succeeds() {
-        let dir = test_dir("runner-ok");
-        let input = dir.join("song.flac");
-        let output = dir.join("song.aiff");
+        let dir = test_dir();
+        let input = dir.path().join("song.flac");
+        let output = dir.path().join("song.aiff");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(false);
@@ -575,8 +552,6 @@ mod tests {
 
         assert_eq!(report.results.len(), 1);
         assert!(matches!(report.results[0], JobResult::Converted));
-
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -619,9 +594,9 @@ mod tests {
 
     #[test]
     fn execute_successfully_converts_wav_target() {
-        let dir = test_dir("wav-target");
-        let input = dir.join("song.flac");
-        let output = dir.join("song.wav");
+        let dir = test_dir();
+        let input = dir.path().join("song.flac");
+        let output = dir.path().join("song.wav");
         fs::write(&input, b"").expect("create input");
 
         let config = test_config(false);
@@ -639,7 +614,5 @@ mod tests {
 
         assert_eq!(report.results.len(), 1);
         assert!(matches!(report.results[0], JobResult::Converted));
-
-        let _ = fs::remove_dir_all(dir);
     }
 }
