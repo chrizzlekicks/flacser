@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.0](https://github.com/chrizzlekicks/flacser/compare/v0.7.1...v1.0.0) (2026-07-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* **flacser:** add multi-format lossless conversion support for FLAC, AIFF and WAV ([#9](https://github.com/chrizzlekicks/flacser/issues/9))
+
+### Features
+
+* **flacser:** add multi-format lossless conversion support for FLAC, AIFF and WAV ([#9](https://github.com/chrizzlekicks/flacser/issues/9)) ([1740bcc](https://github.com/chrizzlekicks/flacser/commit/1740bcc2d287458cff33423f2ad81dc7c7b60cf0))
+
+
+### Bug Fixes
+
+* **flacser:** add warning message for wav conversion ([#18](https://github.com/chrizzlekicks/flacser/issues/18)) ([8c4d2f3](https://github.com/chrizzlekicks/flacser/commit/8c4d2f3449b13c3a4b60190d8745a97ffb290d69))
+
 ## [0.7.1](https://github.com/chrizzlekicks/flacser/compare/v0.7.0...v0.7.1) (2026-07-10)
 
 
