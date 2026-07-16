@@ -73,7 +73,7 @@ flacser <COMMAND> [OPTIONS]
 - `--output-dir <OUTPUT_DIR>, -o <OUTPUT_DIR>`: diagnose a specific output directory
 - `--jobs <JOBS>, -j <JOBS>`: diagnose a specific parallel worker limit
 
-`doctor` always discovers `.flac` files recursively when validating a directory input.
+`doctor` always discovers supported audio files recursively when validating a directory input. When `--to` is provided, files already in the target format are excluded from conversion planning.
 
 ## Behavior
 
@@ -91,6 +91,7 @@ flacser <COMMAND> [OPTIONS]
 - Non-recursive by default (top-level only)
 - Recurses into subdirectories when `--recursive` is set
 - Finds `.flac`, `.aiff`, `.aif`, and `.wav` files case-insensitively
+- Excludes files already in the target format
 - Preserves relative structure from the input root
 - Uses the target format's canonical extension; AIFF outputs use `.aiff`
 - Non-flatten planning checks collisions on exact output paths
@@ -105,7 +106,7 @@ flacser <COMMAND> [OPTIONS]
 - Default jobs: `max(1, cpu_cores - 1)`
 - Summary reports actual workers used for the run
 - Continues processing when individual jobs fail
-- Exits non-zero if any job fails
+- Exits `1` if any job fails and `130` when interrupted
 
 ### Doctor command
 

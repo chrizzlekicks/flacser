@@ -6,7 +6,7 @@ flacser is a Rust CLI tool for converting lossless FLAC, AIFF, and WAV audio fil
 
 It is designed as a batch-capable conversion engine with deterministic behavior, safe filesystem handling, and bounded parallel execution.
 
-The CLI is a thin layer over a reusable core.
+The CLI orchestrates the conversion modules in the binary crate.
 
 ---
 
@@ -81,12 +81,13 @@ Represents outcome of a job.
 enum JobResult {
     Converted,
     Skipped,
-    Failed(String),
+    Interrupted { input: PathBuf },
+    Failed { input: PathBuf, error: String },
 }
 
 ---
 
-### BatchSummary
+### Summary
 
 Aggregated results:
 
@@ -94,6 +95,9 @@ Aggregated results:
 - converted
 - skipped
 - failed
+- interrupted
+- workers
+- failure and interruption details
 
 ---
 
@@ -118,7 +122,7 @@ Output: Vec<PathBuf>
 - use the target format canonical extension
 - preserve relative structure
 - validate output directory
-- reject same-format conversion
+- reject same-format file conversions; directory discovery excludes files already in the target format
 - detect collisions on exact output paths, or on flattened output file-name bytes with ASCII lowercasing when `--flatten` is enabled
 
 Output: Vec<ConversionJob>
@@ -133,7 +137,7 @@ Output: Vec<ConversionJob>
 - collect JobResult
 - `ffmpeg.rs` owns target-specific probing, codec, muxer, and mapping args
 - keep integration coverage platform-agnostic where possible via fake `ffmpeg` / `ffprobe` helpers
-- validate interrupt handling with dedicated coverage for the interrupt flag and signal handler
+- test interrupt-flag handling; signal hookup remains platform-specific
 
 ---
 
@@ -141,7 +145,9 @@ Output: Vec<ConversionJob>
 
 - aggregate results
 - print summary
-- determine exit code
+- report failures and interruptions
+
+`main.rs` determines the process exit code: `1` for failed jobs and `130` when interrupted.
 
 ### Doctor
 
@@ -214,13 +220,13 @@ input/album/song.flac
 
 - use anyhow
 - fail early on invalid input
-- no panics for runtime errors
+- report expected runtime errors; unrecoverable setup failures may panic
 
 Batch:
 
 - continue on errors
-- collect failures
-- exit non-zero if any failed
+- collect failures and interruptions
+- exit non-zero if any failed or interrupted
 
 ---
 
