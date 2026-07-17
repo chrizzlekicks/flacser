@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="320" viewBox="0 0 1400 320"
+  role="img" aria-labelledby="title desc">
+  <title id="title">flacser horizontal logo — for light backgrounds</title>
+  <desc id="desc">Horizontal flacser logo with a file conversion icon and prominent audio waveform.</desc>
+
+  <defs>
+    <linearGradient id="brand" gradientUnits="userSpaceOnUse" x1="0" y1="20" x2="270" y2="245">
+      <stop offset="0%" stop-color="#FFC46F"/>
+      <stop offset="48%" stop-color="#E9A7C8"/>
+      <stop offset="100%" stop-color="#78A7FF"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(34 20)">
+
+  <g aria-label="flacser icon">
+    <!-- document outline -->
+    <path d="M92 28H190L246 84V190"
+          fill="none" stroke="url(#brand)" stroke-width="18"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M190 28V84H246"
+          fill="none" stroke="url(#brand)" stroke-width="18"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M92 28C66 28 52 43 52 69V104"
+          fill="none" stroke="url(#brand)" stroke-width="18"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M52 174V214C52 239 67 252 92 252H214"
+          fill="none" stroke="url(#brand)" stroke-width="18"
+          stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- prominent waveform -->
+    <g stroke="url(#brand)" stroke-width="16" stroke-linecap="round">
+      <line x1="18"  y1="140" x2="18"  y2="140"/>
+      <line x1="43"  y1="128" x2="43"  y2="152"/>
+      <line x1="68"  y1="112" x2="68"  y2="168"/>
+      <line x1="93"  y1="94"  x2="93"  y2="186"/>
+      <line x1="118" y1="70"  x2="118" y2="210"/>
+      <line x1="143" y1="88"  x2="143" y2="192"/>
+      <line x1="168" y1="104" x2="168" y2="176"/>
+      <line x1="193" y1="118" x2="193" y2="162"/>
+      <line x1="218" y1="132" x2="218" y2="148"/>
+    </g>
+
+    <!-- conversion arrow -->
+    <path d="M188 220H258M233 195L258 220L233 245"
+          fill="none" stroke="url(#brand)" stroke-width="18"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  </g>
+  <text x="365" y="212"
+        fill="#111827"
+        font-family="'Nunito Sans', 'Avenir Next', 'Segoe UI', system-ui, sans-serif"
+        font-size="152"
+        font-weight="400"
+        letter-spacing="5">flacser</text>
+</svg>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320"
+ role="img" aria-labelledby="title">
+  <title id="title">flacser monochrome icon</title>
+  <g transform="translate(22 20)" stroke="currentColor" fill="none">
+    <path d="M92 28H190L246 84V190" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M190 28V84H246" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M92 28C66 28 52 43 52 69V104" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M52 174V214C52 239 67 252 92 252H214" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <g stroke-width="16" stroke-linecap="round">
+      <line x1="18" y1="140" x2="18" y2="140"/>
+      <line x1="43" y1="128" x2="43" y2="152"/>
+      <line x1="68" y1="112" x2="68" y2="168"/>
+      <line x1="93" y1="94" x2="93" y2="186"/>
+      <line x1="118" y1="70" x2="118" y2="210"/>
+      <line x1="143" y1="88" x2="143" y2="192"/>
+      <line x1="168" y1="104" x2="168" y2="176"/>
+      <line x1="193" y1="118" x2="193" y2="162"/>
+      <line x1="218" y1="132" x2="218" y2="148"/>
+    </g>
+    <path d="M188 220H258M233 195L258 220L233 245"
+          stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

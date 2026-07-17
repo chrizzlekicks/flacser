@@ -3,7 +3,11 @@
     ".": {
       "release-type": "rust",
       "package-name": "flacser",
-      "include-component-in-tag": false
+      "include-component-in-tag": false,
+      "exclude-paths": [
+        "website/**",
+        ".github/workflows/deploy-website.yml"
+      ]
     }
   }
 }
