@@ -4,6 +4,16 @@
 
 It supports single-file conversion, directory batch conversion with parallel execution, and a read-only `doctor` command for readiness checks.
 
+## Install
+
+```bash
+# Homebrew
+brew install chrizzlekicks/flacser/flacser
+
+# Cargo
+cargo install flacser
+```
+
 ## Requirements
 
 - `ffmpeg`
