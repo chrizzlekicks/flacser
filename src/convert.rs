@@ -106,16 +106,9 @@ fn temp_output_path(output: &Path) -> PathBuf {
 
     let mut temp_file_name = format!(".{}.flacser-{pid}-{id}", file_name.to_string_lossy());
 
-    #[expect(
-        clippy::single_match,
-        reason = "match keeps both Option cases explicit in this path-building helper"
-    )]
-    match output.extension() {
-        Some(extension) => {
-            temp_file_name.push('.');
-            temp_file_name.push_str(&extension.to_string_lossy());
-        }
-        None => {}
+    if let Some(extension) = output.extension() {
+        temp_file_name.push('.');
+        temp_file_name.push_str(&extension.to_string_lossy());
     }
 
     output.with_file_name(temp_file_name)
