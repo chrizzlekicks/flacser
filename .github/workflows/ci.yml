@@ -40,3 +40,27 @@ jobs:
 
     - name: Build
       run: cargo build --all-targets --all-features
+
+    - name: Install FFmpeg on macOS
+      if: matrix.os == 'macos-latest'
+      run: brew install ffmpeg
+
+    - name: Install FFmpeg on Linux
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+
+    - name: Build release binary
+      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+      run: cargo build --release --locked
+
+    - name: Smoke test
+      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+      shell: bash
+      run: |
+        ./target/release/flacser --version
+        ./target/release/flacser doctor
+        # Generate a tiny fixture, convert it, and validate the output.
+        mkdir -p "$RUNNER_TEMP/flacser-smoke"
+        ffmpeg -y -f lavfi -i sine=frequency=1000:duration=0.1 -c:a pcm_s16le "$RUNNER_TEMP/flacser-smoke/input.wav"
+        ./target/release/flacser convert --to flac --output-dir "$RUNNER_TEMP/flacser-smoke/output" "$RUNNER_TEMP/flacser-smoke/input.wav"
+        ffprobe -v error -show_entries format=format_name -of default=noprint_wrappers=1:nokey=1 "$RUNNER_TEMP/flacser-smoke/output/input.flac" | grep -qx flac
