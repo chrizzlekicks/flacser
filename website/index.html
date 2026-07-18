@@ -68,7 +68,7 @@
     <section class="safety-wrap" id="safety" aria-labelledby="safety-title">
       <div class="section container safety">
         <div><p class="eyebrow">No surprises</p><h2 id="safety-title">Careful with the files you care about.</h2></div>
-        <div class="safety-copy"><p>Before conversion starts, flacser plans output paths and detects collisions. Outputs already present when their job starts are skipped.</p><p>Each conversion writes to a temporary file first, then moves it into place only when ffmpeg succeeds. Source files are never modified.</p></div>
+        <div class="safety-copy"><p>Before conversion starts, flacser plans output paths and detects collisions. Outputs already present when their job starts are skipped.</p><p>Each conversion is atomical, it writes the concerted file only when ffmpeg succeeds. Source files are never modified.</p></div>
       </div>
     </section>
 
