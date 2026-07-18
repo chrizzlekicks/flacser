@@ -23,6 +23,7 @@ document.querySelectorAll('.copy-button').forEach((button) => {
       setTimeout(() => { button.textContent = 'Copy'; }, 1500);
     } catch {
       button.textContent = 'Copy failed';
+      setTimeout(() => { button.textContent = 'Copy'; }, 1500);
     }
   });
 });

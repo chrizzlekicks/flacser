@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Usage guide — flacser</title>
+  <meta name="description" content="A complete guide to installing, configuring, and using flacser for lossless audio conversion.">
+  <link rel="canonical" href="https://chrizzlekicks.github.io/flacser/usage.html">
+  <link rel="icon" href="assets/brand/flacser-icon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Usage guide — flacser">
+  <meta property="og:description" content="Install, configure, and use flacser for safe lossless audio conversion.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://chrizzlekicks.github.io/flacser/usage.html">
+  <meta property="og:image" content="https://chrizzlekicks.github.io/flacser/assets/images/social-preview.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <nav class="nav container" aria-label="Primary navigation">
+      <a class="brand" href="index.html" aria-label="flacser home"><img src="assets/brand/flacser-horizontal-dark.svg" alt="flacser"></a>
+      <button class="menu-button" type="button" aria-expanded="false" aria-controls="nav-links">Menu</button>
+      <div class="nav-links" id="nav-links">
+        <a href="index.html#features">Features</a>
+        <a href="index.html#formats">Formats</a>
+        <a href="usage.html" aria-current="page">Usage guide</a>
+        <a href="https://github.com/chrizzlekicks/flacser">GitHub <span aria-hidden="true">↗</span></a>
+        <a class="button button-small" href="index.html#get-started">Get started</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="docs-hero container">
+      <p class="eyebrow">Usage guide</p>
+      <h1>Convert with a plan, <span>not a prayer.</span></h1>
+      <p class="lede">Everything you need to install flacser, preview its work, convert a track or library, and understand what happens to your files.</p>
+    </section>
+
+    <div class="docs-layout container">
+      <aside class="docs-toc" aria-label="On this page">
+        <p class="eyebrow">On this page</p>
+        <a href="#install">Install and check</a>
+        <a href="#first-conversion">First conversion</a>
+        <a href="#directory-conversion">Convert a directory</a>
+        <a href="#output-paths">Choose output paths</a>
+        <a href="#options">Command reference</a>
+        <a href="#doctor">Use doctor</a>
+        <a href="#what-to-expect">What to expect</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+      </aside>
+
+      <article class="docs-content">
+        <section id="install" aria-labelledby="install-title">
+          <p class="eyebrow">01 — Before you convert</p>
+          <h2 id="install-title">Install flacser and its audio tools.</h2>
+          <p>flacser calls <code>ffmpeg</code> to convert audio and <code>ffprobe</code> to inspect source audio when necessary. Both must be available on your <code>PATH</code>.</p>
+          <div class="code-grid docs-cards">
+            <article class="code-card"><h3>Install flacser</h3><div class="command"><code>cargo install flacser</code><button type="button" class="copy-button" data-copy="cargo install flacser" aria-label="Copy Cargo install command">Copy</button></div><p>Or build from a checkout with <code>cargo build --release</code>.</p></article>
+            <article class="code-card"><h3>Install FFmpeg</h3><div class="command"><code>brew install ffmpeg</code><button type="button" class="copy-button" data-copy="brew install ffmpeg" aria-label="Copy FFmpeg install command">Copy</button></div><p>On Debian or Ubuntu use <code>sudo apt install ffmpeg</code>; on Arch use <code>sudo pacman -S ffmpeg</code>.</p></article>
+          </div>
+          <p>On Windows, install FFmpeg and make sure both <code>ffmpeg.exe</code> and <code>ffprobe.exe</code> are on <code>PATH</code>. Then confirm the setup without changing any files:</p>
+          <div class="command"><code>flacser doctor</code><button type="button" class="copy-button" data-copy="flacser doctor" aria-label="Copy doctor command">Copy</button></div>
+        </section>
+
+        <section id="first-conversion" aria-labelledby="first-conversion-title">
+          <p class="eyebrow">02 — One file</p>
+          <h2 id="first-conversion-title">Convert a track beside its source.</h2>
+          <p>Pass a supported file and a target format. flacser recognizes <code>.flac</code>, <code>.aiff</code>, <code>.aif</code>, and <code>.wav</code> case-insensitively. The source format comes from the extension; the target must be <code>flac</code>, <code>aiff</code>, or <code>wav</code>.</p>
+          <div class="command"><code>flacser convert ./music/track.flac --to aiff</code><button type="button" class="copy-button" data-copy="flacser convert ./music/track.flac --to aiff" aria-label="Copy single-file conversion command">Copy</button></div>
+          <p>This creates <code>./music/track.aiff</code>. Same-format conversions are rejected, and AIFF output always uses the canonical <code>.aiff</code> extension, even when the input uses <code>.aif</code>.</p>
+          <div class="callout"><h3>Start with a dry run</h3><p>Add <code>--dry-run</code> (or <code>-n</code>) to run discovery and planning without invoking ffmpeg or ffprobe. It is the safest way to check a command before a batch conversion.</p><div class="command"><code>flacser convert ./music/track.flac --to wav --dry-run</code><button type="button" class="copy-button" data-copy="flacser convert ./music/track.flac --to wav --dry-run" aria-label="Copy dry-run command">Copy</button></div></div>
+        </section>
+
+        <section id="directory-conversion" aria-labelledby="directory-conversion-title">
+          <p class="eyebrow">03 — A library</p>
+          <h2 id="directory-conversion-title">Convert a directory without losing its shape.</h2>
+          <p>With a directory input, flacser finds supported files in its top level by default and converts every file that is not already in the target format. Add <code>--recursive</code> (or <code>-r</code>) to include subdirectories.</p>
+          <div class="command"><code>flacser convert ./music --to aiff --recursive --output-dir ./converted</code><button type="button" class="copy-button" data-copy="flacser convert ./music --to aiff --recursive --output-dir ./converted" aria-label="Copy recursive directory conversion command">Copy</button></div>
+          <p>That command maps <code>./music/albums/one/song.flac</code> to <code>./converted/albums/one/song.aiff</code>. Without <code>--output-dir</code>, outputs are placed under the input directory itself, preserving the same relative path.</p>
+          <p>Use <code>--jobs 2</code> (or <code>-j 2</code>) to limit parallel ffmpeg processes. The default is one fewer than the detected CPU cores, with at least one worker; flacser never starts more workers than planned jobs.</p>
+        </section>
+
+        <section id="output-paths" aria-labelledby="output-paths-title">
+          <p class="eyebrow">04 — Output layout</p>
+          <h2 id="output-paths-title">Pick a destination that fits the job.</h2>
+          <dl class="docs-list">
+            <div><dt>Default</dt><dd>A single-file output sits beside its source. Directory outputs stay under the input root.</dd></div>
+            <div><dt><code>--output-dir DIR</code></dt><dd>Write under <code>DIR</code>. Missing output directories are created during conversion.</dd></div>
+            <div><dt><code>--flatten</code></dt><dd>With a recursive directory conversion, discard source subdirectories and write every output directly into the output root.</dd></div>
+          </dl>
+          <div class="command"><code>flacser convert ./music --to flac -r -f -o ./flat-library</code><button type="button" class="copy-button" data-copy="flacser convert ./music --to flac -r -f -o ./flat-library" aria-label="Copy flattened conversion command">Copy</button></div>
+          <p>Flattening is useful for a small, uniquely named collection. It has no effect without <code>--recursive</code>. flacser stops before conversion if two inputs would map to the same flattened name, including ASCII case-only differences such as <code>Song.flac</code> and <code>song.flac</code>.</p>
+        </section>
+
+        <section id="options" aria-labelledby="options-title">
+          <p class="eyebrow">05 — Reference</p>
+          <h2 id="options-title">Know the two commands.</h2>
+          <h3><code>flacser convert [OPTIONS] &lt;INPUT_PATH&gt;</code></h3>
+          <dl class="docs-list">
+            <div><dt><code>--to FORMAT</code></dt><dd>Required target: <code>flac</code>, <code>aiff</code>, or <code>wav</code>. Set <code>FLACSER_CONVERT_TO</code> to supply it by environment instead.</dd></div>
+            <div><dt><code>-o</code>, <code>--output-dir DIR</code></dt><dd>Destination root for the converted file or files.</dd></div>
+            <div><dt><code>-n</code>, <code>--dry-run</code></dt><dd>Plan the conversion without running ffmpeg or ffprobe.</dd></div>
+            <div><dt><code>-r</code>, <code>--recursive</code></dt><dd>Discover supported files below a directory input.</dd></div>
+            <div><dt><code>-f</code>, <code>--flatten</code></dt><dd>Ignore nested paths for recursive directory outputs.</dd></div>
+            <div><dt><code>-j</code>, <code>--jobs N</code></dt><dd>Use a positive number of parallel conversion jobs.</dd></div>
+          </dl>
+          <h3><code>flacser doctor [OPTIONS] [INPUT_PATH]</code></h3>
+          <p><code>doctor</code> accepts <code>--to</code>, <code>--output-dir</code>, and <code>--jobs</code>. It never converts, creates, or modifies files.</p>
+        </section>
+
+        <section id="doctor" aria-labelledby="doctor-title">
+          <p class="eyebrow">06 — Readiness checks</p>
+          <h2 id="doctor-title">Ask doctor before a large batch.</h2>
+          <p>Run <code>doctor</code> with no input to check FFmpeg, ffprobe, CPU detection, and default workers. Give it a path and target to also validate discovery and output planning. Directory diagnosis always scans recursively, so it sees the whole library.</p>
+          <div class="command"><code>flacser doctor ./music --to aiff --output-dir ./converted --jobs 4</code><button type="button" class="copy-button" data-copy="flacser doctor ./music --to aiff --output-dir ./converted --jobs 4" aria-label="Copy detailed doctor command">Copy</button></div>
+          <p>The report marks checks as <code>ok</code>, <code>warn</code>, or <code>fail</code>. A worker count above available CPU cores is a warning; missing tools, unavailable inputs, invalid output paths, or failed output planning make the command exit non-zero.</p>
+        </section>
+
+        <section id="what-to-expect" aria-labelledby="what-to-expect-title">
+          <p class="eyebrow">07 — During conversion</p>
+          <h2 id="what-to-expect-title">Safe defaults, explicit results.</h2>
+          <ul class="docs-bullets">
+            <li>Every job writes a temporary file first, then moves it into place only after ffmpeg succeeds. Source files are never modified.</li>
+            <li>If an output already exists when its job starts, that job is skipped rather than overwritten.</li>
+            <li>flacser prints completed-job progress and a final summary with converted, skipped, failed, interrupted, and worker counts.</li>
+            <li>A failed job does not stop other jobs. The process exits with <code>1</code> when any job fails and <code>130</code> when interrupted.</li>
+            <li>FLAC uses the FLAC encoder. WAV and AIFF choose a PCM codec from source information reported by ffprobe. Metadata transfer is best effort and depends on the container; WAV keeps only the first audio stream and drops cover art and other non-audio streams.</li>
+          </ul>
+        </section>
+
+        <section id="troubleshooting" aria-labelledby="troubleshooting-title">
+          <p class="eyebrow">08 — Common fixes</p>
+          <h2 id="troubleshooting-title">When a command does not go to plan.</h2>
+          <dl class="docs-list">
+            <div><dt>“target format is required”</dt><dd>Add <code>--to flac</code>, <code>--to aiff</code>, or <code>--to wav</code>, or set <code>FLACSER_CONVERT_TO</code>.</dd></div>
+            <div><dt>ffmpeg or ffprobe not found</dt><dd>Install FFmpeg and restart the terminal after adding its binary directory to <code>PATH</code>. Confirm with <code>flacser doctor</code>.</dd></div>
+            <div><dt>Output collision</dt><dd>Choose another output directory, preserve the directory structure, or rename conflicting source files. Do not use <code>--flatten</code> when names are not unique.</dd></div>
+            <div><dt>Output was skipped</dt><dd>An output file was already present. Move or rename it if you intend to make a new conversion; flacser does not overwrite it.</dd></div>
+          </dl>
+        </section>
+      </article>
+    </div>
+
+    <section class="final-cta container" aria-labelledby="cta-title">
+      <img src="assets/brand/flacser-icon.svg" alt="" width="88" height="88">
+      <p class="eyebrow">Ready when you are</p><h2 id="cta-title">Check the plan, then let it run.</h2>
+      <a class="button" href="index.html#get-started">Get started</a>
+    </section>
+  </main>
+
+  <footer class="footer container">
+    <img src="assets/brand/flacser-horizontal-dark.svg" alt="flacser">
+    <p>Lossless conversion with ffmpeg.</p>
+    <div><a href="usage.html">Usage guide</a><a href="https://github.com/chrizzlekicks/flacser">GitHub</a><a href="https://crates.io/crates/flacser">crates.io</a><a href="https://github.com/chrizzlekicks/flacser/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/chrizzlekicks/flacser/blob/main/LICENSE">MIT License</a></div>
+  </footer>
+</body>
+</html>

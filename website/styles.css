@@ -10,7 +10,7 @@
   --pink: #e9a7c8;
   --blue: #78a7ff;
   --gradient: linear-gradient(105deg, var(--peach), var(--pink) 52%, var(--blue));
-  --sans: "Nunito Sans", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --sans: "Nunito Sans", system-ui, sans-serif;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --max: 1160px;
   --space: clamp(1.25rem, 3vw, 2rem);
@@ -18,7 +18,7 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
 body { margin: 0; color: var(--text); background: var(--bg); font-family: var(--sans); font-size: 1rem; line-height: 1.6; }
 a { color: inherit; text-decoration: none; }
 img { display: block; max-width: 100%; }
@@ -78,16 +78,19 @@ thead { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter
 .code-grid { display: grid; grid-template-columns: 1fr; grid-auto-rows: 1fr; gap: 1rem; }
 .code-card { min-height: 12.5rem; padding: 1.4rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .command { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: 1.1rem 0; padding: .75rem; border-radius: .5rem; color: #ddd8ed; background: #0c0d13; }
-.command code { overflow-x: auto; white-space: nowrap; }.copy-button { flex: none; border: 1px solid var(--line); border-radius: .35rem; padding: .28rem .45rem; color: var(--muted); background: var(--surface-raised); font: .74rem var(--sans); cursor: pointer; }.copy-button:hover { color: var(--text); }
+.command code { overflow-x: auto; padding-right: 1.5rem; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 92%, transparent); mask-image: linear-gradient(90deg, #000 92%, transparent); }.copy-button { flex: none; border: 1px solid var(--line); border-radius: .35rem; padding: .28rem .45rem; color: var(--muted); background: var(--surface-raised); font: .74rem var(--sans); cursor: pointer; }.copy-button:hover { color: var(--text); }
 .final-cta { margin-bottom: clamp(5rem, 10vw, 8rem); padding: clamp(2rem, 6vw, 4rem); border: 1px solid var(--line); border-radius: calc(var(--radius) * 1.5); background: linear-gradient(135deg, #171823, #11121a); text-align: center; }.final-cta img { width: 5.5rem; margin: 0 auto 1rem; }.final-cta h2 { max-width: 15ch; margin-inline: auto; }.final-cta .button { margin-top: .75rem; }
 .footer { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1.5rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }.footer img { width: 8.25rem; }.footer p { margin: 0; }.footer div { display: flex; flex-wrap: wrap; justify-content: end; gap: 1rem; }
 
+.docs-hero { padding-block: clamp(4rem, 9vw, 7rem) clamp(3rem, 7vw, 5rem); border-bottom: 1px solid var(--line); }.docs-hero h1 { max-width: 13ch; font-size: clamp(3rem, 6vw, 5.2rem); }.docs-layout { display: grid; grid-template-columns: 12rem minmax(0, 1fr); gap: clamp(2.5rem, 7vw, 7rem); padding-block: clamp(4rem, 8vw, 7rem); }.docs-toc { align-self: start; position: sticky; top: 6.5rem; display: grid; gap: .5rem; font-size: .9rem; color: var(--muted); }.docs-toc .eyebrow { margin-bottom: .25rem; }.docs-toc a:hover { color: var(--text); }.docs-content { max-width: 48rem; }.docs-content section + section { padding-top: clamp(4rem, 8vw, 6rem); border-top: 1px solid var(--line); }.docs-content h2 { max-width: 20ch; font-size: clamp(1.6rem, 3vw, 2.1rem); text-wrap: balance; }.docs-content h3 { margin-top: 2rem; font-size: 1.25rem; }.docs-content p, .docs-content li, .docs-list { color: var(--muted); }.docs-cards { grid-template-columns: repeat(2, 1fr); margin-bottom: 1.5rem; }.docs-cards .code-card { min-width: 0; min-height: 0; }.callout { margin: 2rem 0; padding: 1.35rem; border: 1px solid var(--line); border-left: 3px solid var(--peach); border-radius: var(--radius); background: var(--surface); }.callout h3, .docs-cards h3 { margin-top: 0; }.callout p { margin-bottom: 1rem; }.docs-list { margin: 1.5rem 0; }.docs-list div { display: grid; grid-template-columns: minmax(10rem, .8fr) 2fr; gap: 1rem; padding: 1rem 0; border-top: 1px solid var(--line); }.docs-list div:last-child { border-bottom: 1px solid var(--line); }.docs-list dt { color: var(--text); font-weight: 800; }.docs-list dd { margin: 0; }.docs-bullets { padding-left: 1.2rem; color: var(--muted); }.docs-bullets li + li { margin-top: .8rem; }
+
+@media (max-width: 900px) { .benefits { grid-template-columns: repeat(2, 1fr); }.docs-layout { grid-template-columns: 1fr; }.docs-toc { position: static; grid-template-columns: repeat(2, 1fr); padding-bottom: 2rem; border-bottom: 1px solid var(--line); }.docs-toc .eyebrow { grid-column: 1 / -1; } }
 @media (max-width: 800px) { .menu-button { display: block; }.nav-links { display: none; position: absolute; top: 4.75rem; right: var(--space); left: var(--space); align-items: stretch; padding: 1rem; border: 1px solid var(--line); border-radius: 0 0 var(--radius) var(--radius); background: var(--surface); }.nav-links.is-open { display: flex; flex-direction: column; }.nav-links .button { margin-top: .4rem; }.hero, .safety { grid-template-columns: 1fr; }.hero { min-height: auto; }.benefits, .code-grid { grid-template-columns: repeat(2, 1fr); }.footer { grid-template-columns: 1fr; }.footer div { justify-content: start; } }
 @media (max-width: 520px) {
   :root { --space: 1rem; }
   .nav { min-height: 4.25rem; }.brand img { width: 9rem; }.nav-links { top: 4.25rem; }
   .hero { gap: 2.5rem; padding-block: 3.5rem; }.hero h1 { font-size: clamp(2.65rem, 13vw, 3.25rem); }
-  .benefits, .code-grid { grid-template-columns: 1fr; }.actions { align-items: flex-start; flex-direction: column; gap: 1rem; }.button { width: 100%; }
+  .benefits, .code-grid, .docs-cards { grid-template-columns: 1fr; }.docs-toc { grid-template-columns: 1fr; }.docs-list div { grid-template-columns: 1fr; gap: .25rem; }.actions { align-items: flex-start; flex-direction: column; gap: 1rem; }.button { width: 100%; }
   .terminal { margin-inline: -.25rem; border-radius: .7rem; }.terminal-bar { min-height: 2.4rem; } pre { padding: 1rem; font-size: .72rem; }
   .format-table { margin-inline: 0; overflow: visible; border: 0; }.format-table table, .format-table tbody, .format-table tr, .format-table th, .format-table td { display: block; width: 100%; }
   .format-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }.format-table tbody { display: grid; gap: .75rem; }
