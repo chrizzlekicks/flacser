@@ -126,7 +126,7 @@
           <p class="eyebrow">07 — During conversion</p>
           <h2 id="what-to-expect-title">Safe defaults, explicit results.</h2>
           <ul class="docs-bullets">
-            <li>Every job writes a temporary file first, then moves it into place only after ffmpeg succeeds. Source files are never modified.</li>
+            <li>Every job handles a conversion atomically, converted files are written only after ffmpeg succeeds. Source files are never modified.</li>
             <li>If an output already exists when its job starts, that job is skipped rather than overwritten.</li>
             <li>flacser prints completed-job progress and a final summary with converted, skipped, failed, interrupted, and worker counts.</li>
             <li>A failed job does not stop other jobs. The process exits with <code>1</code> when any job fails and <code>130</code> when interrupted.</li>
