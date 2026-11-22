@@ -1,16 +1,5 @@
-mod audio_format;
-mod cli;
-mod config;
-mod convert;
-mod discover;
-mod doctor;
-mod ffmpeg;
-mod interrupt;
-mod plan;
-mod progress;
-mod summary;
-
 use anyhow::Result;
+use flacser::{cli, config, doctor, interrupt, summary};
 
 fn main() -> Result<()> {
     let cli = cli::parse();
@@ -27,21 +16,23 @@ fn run_convert(convert: cli::ConvertArgs) -> Result<()> {
 
     let config = config::Config::from_convert_args(convert)?;
 
-    let inputs = discover::discover(&config)?;
-    let jobs = plan::plan(&config, inputs)?;
-
-    if ffmpeg::is_needed(&config, &jobs) {
-        ffmpeg::check_availability()?;
-    }
-
-    if ffmpeg::probe_is_needed(&config, &jobs) {
-        let probe = ffmpeg::probe_ffprobe_version();
-        if !probe.executable_found {
-            anyhow::bail!(ffmpeg::FFPROBE_NOT_FOUND);
-        }
-    }
-
-    let report = convert::execute(&config, jobs, &interrupt);
+    let reporter = std::sync::OnceLock::new();
+    let report = flacser::run_conversion_with_presentation(
+        &config,
+        &interrupt,
+        &|jobs| {
+            reporter
+                .set(flacser::progress::ProgressReporter::new(jobs.len()))
+                .unwrap();
+            if jobs
+                .iter()
+                .any(|job| job.target_format == flacser::audio_format::AudioFormat::Wav)
+            {
+                eprintln!("{}", flacser::ffmpeg::WAV_METADATA_NOTE);
+            }
+        },
+        &|| reporter.get().unwrap().finish_job(),
+    )?;
     let summary = summary::Summary::from_report(&report);
 
     summary.print();

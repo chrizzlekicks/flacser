@@ -28,7 +28,7 @@ impl Summary {
 
         for result in results {
             match result {
-                JobResult::Converted => converted += 1,
+                JobResult::Converted { .. } => converted += 1,
                 JobResult::Skipped => skipped += 1,
                 JobResult::Interrupted { input } => {
                     interrupted += 1;
@@ -93,7 +93,9 @@ mod tests {
     fn aggregates_counts_and_failure_details() {
         let failed_input = PathBuf::from("broken.flac");
         let results = vec![
-            JobResult::Converted,
+            JobResult::Converted {
+                diagnostics: String::new(),
+            },
             JobResult::Skipped,
             JobResult::Failed {
                 input: failed_input.clone(),

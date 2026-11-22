@@ -28,6 +28,7 @@ clap = { version = "4", features = ["derive", "env"] }
 anyhow = "1"
 ctrlc = "3"
 rayon = "1"
+renamore = "0.3.2"
 walkdir = "2"
 
 [dev-dependencies]

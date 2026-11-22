@@ -10,6 +10,12 @@ pub struct InterruptFlag {
     interrupted: Arc<AtomicBool>,
 }
 
+impl Default for InterruptFlag {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InterruptFlag {
     pub fn new() -> Self {
         Self {
@@ -44,6 +50,11 @@ mod tests {
         let flag = InterruptFlag::new();
 
         assert!(!flag.is_interrupted());
+    }
+
+    #[test]
+    fn default_flag_starts_uninterrupted() {
+        assert!(!InterruptFlag::default().is_interrupted());
     }
 
     #[test]

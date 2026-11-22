@@ -200,3 +200,10 @@ Interrupt handling is covered by tests; OS signal hookup remains platform-specif
 ## License
 
 MIT
+
+Output publication uses atomic rename without replacement: Linux uses
+`renameat2`, macOS uses `renamex_np`, and Windows uses `MoveFileExW` without
+replacement. Filesystem and OS support is required (including for FAT/exFAT);
+if unavailable, conversion fails and cleanup of the temporary output is
+attempted on a best-effort basis; the temporary file may remain if cleanup
+fails. Other operating systems are unsupported for publication.
