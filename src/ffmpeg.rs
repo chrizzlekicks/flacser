@@ -1,5 +1,5 @@
 use std::{
-    io,
+    io::{self, Read},
     path::Path,
     process::{Command, Output, Stdio},
 };
@@ -172,28 +172,70 @@ pub fn probe_is_needed(config: &Config, jobs: &[ConversionJob]) -> bool {
         })
 }
 
-pub fn run_ffmpeg(job: &ConversionJob, output: &Path) -> Result<()> {
-    debug_assert_ne!(job.source_format, job.target_format);
+pub fn run_ffmpeg(job: &ConversionJob, output: &Path) -> Result<String> {
+    run_ffmpeg_mode(job, output, false)
+}
 
+pub fn run_ffmpeg_streaming(job: &ConversionJob, output: &Path) -> Result<String> {
+    run_ffmpeg_mode(job, output, true)
+}
+
+fn run_ffmpeg_mode(job: &ConversionJob, output: &Path, streaming: bool) -> Result<String> {
+    debug_assert_ne!(job.source_format, job.target_format);
     let pcm_codec = match job.target_format {
         AudioFormat::Aiff | AudioFormat::Wav => Some(probe_pcm_codec(job)?),
         AudioFormat::Flac => None,
     };
-
-    let status = run_ffmpeg_candidate(|candidate| {
-        ffmpeg_command(candidate, job, output, pcm_codec).status()
+    let mut child = run_ffmpeg_candidate(|candidate| {
+        let mut command = ffmpeg_command(candidate, job, output, pcm_codec);
+        if !streaming {
+            command.stdout(Stdio::null()).stderr(Stdio::piped());
+        }
+        command.spawn()
     })
     .with_context(|| format!("failed to spawn ffmpeg for {}", job.input.display()))?;
-
+    let mut bytes = Vec::new();
+    let mut truncated = false;
+    if let Some(mut stderr) = child.stderr.take() {
+        let mut buffer = [0; 8192];
+        loop {
+            let n = match stderr.read(&mut buffer) {
+                Ok(n) => n,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(error) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(error.into());
+                }
+            };
+            if n == 0 {
+                break;
+            }
+            let keep = n.min(65536usize.saturating_sub(bytes.len()));
+            bytes.extend_from_slice(&buffer[..keep]);
+            truncated |= keep < n;
+        }
+    }
+    let status = child.wait()?;
+    let mut diagnostics = String::from_utf8_lossy(&bytes).into_owned();
+    const MARKER: &str = "\n[diagnostics truncated]";
+    if truncated || diagnostics.len() > 65536 {
+        let mut end = (65536 - MARKER.len()).min(diagnostics.len());
+        while !diagnostics.is_char_boundary(end) {
+            end -= 1;
+        }
+        diagnostics.truncate(end);
+        diagnostics.push_str(MARKER);
+    }
     if !status.success() {
         bail!(
-            "ffmpeg exited with status {} for input {}",
+            "ffmpeg exited with status {} for input {}: {}",
             status,
-            job.input.display()
+            job.input.display(),
+            diagnostics.trim_end()
         );
     }
-
-    Ok(())
+    Ok(diagnostics)
 }
 
 #[derive(Debug, PartialEq, Eq)]

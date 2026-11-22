@@ -243,6 +243,21 @@ Must not contain core logic.
 
 ---
 
+## Desktop handoff
+
+PR #21 (`refactor/pipeline-lib-exposure`) implements the shared-library and atomic safety/diagnostics groundwork. The first desktop milestone is one native-picked FLAC → AIFF conversion through the shared Rust pipeline, using bundled `ffmpeg` and `ffprobe` without relying on PATH.
+
+- [x] Shared-library and atomic safety/diagnostics groundwork implemented in PR #21
+- [ ] Provide explicit executable paths to the pipeline and diagnostics
+- [ ] Build a Tauri 2 + React + TypeScript + Vite one-file interface
+- [ ] Bundle both `ffmpeg` and `ffprobe`
+- [ ] Install and convert offline without either tool on PATH
+- [ ] Verify real AIFF output, including PCM depth and target-platform behavior
+
+Target OS/architecture and FFmpeg build provenance/licensing remain open; batch UI is deferred. The website's installed checklist is only in browser localStorage; this section is the durable repo handoff.
+
+---
+
 ## Extensibility
 
 Future additions:

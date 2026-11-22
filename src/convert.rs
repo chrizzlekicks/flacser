@@ -8,18 +8,16 @@ use anyhow::Result;
 
 use rayon::prelude::*;
 
-use crate::audio_format::AudioFormat;
 use crate::config::Config;
-use crate::ffmpeg::run_ffmpeg;
+use crate::ffmpeg::{run_ffmpeg, run_ffmpeg_streaming};
 use crate::interrupt::InterruptFlag;
 use crate::plan::ConversionJob;
-use crate::progress::ProgressReporter;
 
-type FfmpegRunner = fn(&ConversionJob, &Path) -> Result<()>;
+type FfmpegRunner = fn(&ConversionJob, &Path) -> Result<String>;
 
 #[derive(Debug, Clone)]
 pub enum JobResult {
-    Converted,
+    Converted { diagnostics: String },
     Skipped,
     Interrupted { input: PathBuf },
     Failed { input: PathBuf, error: String },
@@ -37,14 +35,43 @@ pub fn execute(
     jobs: Vec<ConversionJob>,
     interrupt: &InterruptFlag,
 ) -> ExecutionReport {
-    execute_with_runner(config, jobs, run_ffmpeg, interrupt)
+    execute_with_progress(config, jobs, interrupt, &|| {})
 }
 
+pub fn execute_with_progress(
+    config: &Config,
+    jobs: Vec<ConversionJob>,
+    interrupt: &InterruptFlag,
+    progress: &(dyn Fn() + Sync),
+) -> ExecutionReport {
+    execute_with_runner_and_progress(config, jobs, run_ffmpeg, interrupt, progress)
+}
+
+pub fn execute_streaming_with_progress(
+    config: &Config,
+    jobs: Vec<ConversionJob>,
+    interrupt: &InterruptFlag,
+    progress: &(dyn Fn() + Sync),
+) -> ExecutionReport {
+    execute_with_runner_and_progress(config, jobs, run_ffmpeg_streaming, interrupt, progress)
+}
+
+#[cfg(test)]
 fn execute_with_runner(
     config: &Config,
     jobs: Vec<ConversionJob>,
     runner: FfmpegRunner,
     interrupt: &InterruptFlag,
+) -> ExecutionReport {
+    execute_with_runner_and_progress(config, jobs, runner, interrupt, &|| {})
+}
+
+fn execute_with_runner_and_progress(
+    config: &Config,
+    jobs: Vec<ConversionJob>,
+    runner: FfmpegRunner,
+    interrupt: &InterruptFlag,
+    progress: &(dyn Fn() + Sync),
 ) -> ExecutionReport {
     let configured_jobs = config.jobs;
     let dry_run = config.dry_run;
@@ -57,17 +84,11 @@ fn execute_with_runner(
         };
     }
 
-    let reporter = ProgressReporter::new(jobs.len());
-
     let workers = configured_jobs.min(jobs.len()).max(1);
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(workers)
         .build()
         .expect("failed to build rayon threadpool");
-
-    if jobs.iter().any(|j| j.target_format == AudioFormat::Wav) {
-        eprintln!("{}", crate::ffmpeg::WAV_METADATA_NOTE);
-    }
 
     let results: Vec<JobResult> = pool.install(|| {
         jobs.into_par_iter()
@@ -77,7 +98,7 @@ fn execute_with_runner(
                 } else {
                     execute_job(job, dry_run, runner)
                 };
-                reporter.finish_job();
+                progress();
                 result
             })
             .collect()
@@ -120,7 +141,9 @@ fn execute_job(job: ConversionJob, dry_run: bool, runner: FfmpegRunner) -> JobRe
     }
 
     if dry_run {
-        return JobResult::Converted;
+        return JobResult::Converted {
+            diagnostics: String::new(),
+        };
     }
 
     if let Some(parent_dir) = job.output.parent()
@@ -135,17 +158,40 @@ fn execute_job(job: ConversionJob, dry_run: bool, runner: FfmpegRunner) -> JobRe
         };
     }
 
-    let temp_output = temp_output_path(&job.output);
+    let temp_output = loop {
+        let path = temp_output_path(&job.output);
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(_) => break path,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return JobResult::Failed {
+                    input: job.input,
+                    error: format!(
+                        "failed to create temporary output {}: {error}",
+                        path.display()
+                    ),
+                };
+            }
+        }
+    };
 
     match runner(&job, &temp_output) {
-        Ok(()) => match fs::rename(&temp_output, &job.output) {
-            Ok(()) => JobResult::Converted,
+        Ok(diagnostics) => match renamore::rename_exclusive(&temp_output, &job.output) {
+            Ok(()) => JobResult::Converted { diagnostics },
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                let _ = fs::remove_file(&temp_output);
+                JobResult::Skipped
+            }
             Err(error) => {
                 let _ = fs::remove_file(&temp_output);
                 JobResult::Failed {
                     input: job.input.clone(),
                     error: format!(
-                        "failed to move temporary output {} to {}: {error}",
+                        "failed to publish temporary output {} to {}: {error}\n{diagnostics}",
                         temp_output.display(),
                         job.output.display()
                     ),
@@ -204,16 +250,16 @@ mod tests {
         InterruptFlag::new()
     }
 
-    fn runner_ok(_: &ConversionJob, output: &Path) -> Result<()> {
+    fn runner_ok(_: &ConversionJob, output: &Path) -> Result<String> {
         fs::write(output, b"converted")?;
-        Ok(())
+        Ok(String::new())
     }
 
-    fn runner_fail(_: &ConversionJob, _: &Path) -> Result<()> {
+    fn runner_fail(_: &ConversionJob, _: &Path) -> Result<String> {
         Err(anyhow!("boom"))
     }
 
-    fn runner_write_partial_then_fail(_: &ConversionJob, output: &Path) -> Result<()> {
+    fn runner_write_partial_then_fail(_: &ConversionJob, output: &Path) -> Result<String> {
         fs::write(output, b"partial")?;
         Err(anyhow!("boom"))
     }
@@ -234,16 +280,16 @@ mod tests {
         std::sync::atomic::AtomicBool::new(false);
     static INTERRUPT_MID_BATCH_RUNNER_CALLS: AtomicUsize = AtomicUsize::new(0);
 
-    fn runner_mark_called(_: &ConversionJob, _: &Path) -> Result<()> {
+    fn runner_mark_called(_: &ConversionJob, _: &Path) -> Result<String> {
         MKDIR_FAIL_RUNNER_CALLED.store(true, std::sync::atomic::Ordering::Relaxed);
-        Ok(())
+        Ok(String::new())
     }
 
-    fn runner_slow_ok(_: &ConversionJob, output: &Path) -> Result<()> {
+    fn runner_slow_ok(_: &ConversionJob, output: &Path) -> Result<String> {
         INTERRUPT_MID_BATCH_RUNNER_CALLS.fetch_add(1, Ordering::SeqCst);
         thread::sleep(Duration::from_millis(100));
         fs::write(output, b"converted")?;
-        Ok(())
+        Ok(String::new())
     }
 
     #[test]
@@ -273,8 +319,33 @@ mod tests {
     }
 
     #[test]
+    fn competing_output_is_preserved_and_temp_removed() {
+        fn runner_race(job: &ConversionJob, temp: &Path) -> Result<String> {
+            fs::write(temp, b"converted")?;
+            fs::write(&job.output, b"competitor")?;
+            Ok(String::new())
+        }
+        let dir = test_dir();
+        let output = dir.path().join("song.aiff");
+        let report = execute_with_runner(
+            &test_config(false),
+            vec![ConversionJob {
+                input: dir.path().join("song.flac"),
+                output: output.clone(),
+                source_format: AudioFormat::Flac,
+                target_format: AudioFormat::Aiff,
+            }],
+            runner_race,
+            &interrupt_flag(),
+        );
+        assert!(matches!(report.results[0], JobResult::Skipped));
+        assert_eq!(fs::read(output).unwrap(), b"competitor");
+        assert!(temp_files_in(dir.path()).is_empty());
+    }
+
+    #[test]
     fn execute_dry_run_marks_converted_without_calling_runner() {
-        fn panic_runner(_: &ConversionJob, _: &Path) -> Result<()> {
+        fn panic_runner(_: &ConversionJob, _: &Path) -> Result<String> {
             panic!("runner should not be called during dry-run");
         }
 
@@ -297,7 +368,7 @@ mod tests {
         );
 
         assert_eq!(report.results.len(), 1);
-        assert!(matches!(report.results[0], JobResult::Converted));
+        assert!(matches!(report.results[0], JobResult::Converted { .. }));
     }
 
     #[test]
@@ -409,7 +480,7 @@ mod tests {
             &interrupt_flag(),
         );
 
-        assert!(matches!(report.results[0], JobResult::Converted));
+        assert!(matches!(report.results[0], JobResult::Converted { .. }));
         assert_eq!(fs::read(&output).expect("read final output"), b"converted");
         assert!(temp_files_in(dir.path()).is_empty());
     }
@@ -441,7 +512,7 @@ mod tests {
 
     #[test]
     fn interrupted_execution_does_not_call_runner() {
-        fn panic_runner(_: &ConversionJob, _: &Path) -> Result<()> {
+        fn panic_runner(_: &ConversionJob, _: &Path) -> Result<String> {
             panic!("runner should not be called after interrupt");
         }
 
@@ -509,7 +580,7 @@ mod tests {
             report
                 .results
                 .iter()
-                .filter(|result| matches!(result, JobResult::Converted))
+                .filter(|result| matches!(result, JobResult::Converted { .. }))
                 .count(),
             1
         );
@@ -544,7 +615,7 @@ mod tests {
         );
 
         assert_eq!(report.results.len(), 1);
-        assert!(matches!(report.results[0], JobResult::Converted));
+        assert!(matches!(report.results[0], JobResult::Converted { .. }));
     }
 
     #[test]
@@ -606,6 +677,6 @@ mod tests {
         );
 
         assert_eq!(report.results.len(), 1);
-        assert!(matches!(report.results[0], JobResult::Converted));
+        assert!(matches!(report.results[0], JobResult::Converted { .. }));
     }
 }
